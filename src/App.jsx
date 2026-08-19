@@ -597,8 +597,8 @@ function usePadres() {
 }
 
 const SOCCER_TEAMS = [
-  { key: 'sdfc', name: 'San Diego FC', shortName: 'SDFC', league: 'MLS', leagueSlug: 'usa.1', teamId: '22529' },
   { key: 'wave', name: 'San Diego Wave', shortName: 'Wave', league: 'NWSL', leagueSlug: 'usa.nwsl', teamId: '21423' },
+  { key: 'sdfc', name: 'San Diego FC', shortName: 'SDFC', league: 'MLS', leagueSlug: 'usa.1', teamId: '22529' },
 ]
 
 function compactDate(date) {
