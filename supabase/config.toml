@@ -12,3 +12,6 @@ verify_jwt = false
 
 [functions.safety-feeds]
 verify_jwt = true
+
+[functions.sports]
+verify_jwt = true

@@ -53,7 +53,7 @@ createRoot(document.getElementById('root')).render(
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', async () => {
-    const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js?v=5`, { updateViaCache: 'none' })
+    const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js?v=6`, { updateViaCache: 'none' })
     registration.update()
   })
 }

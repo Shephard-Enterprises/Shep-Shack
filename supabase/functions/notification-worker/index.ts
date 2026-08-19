@@ -136,8 +136,8 @@ async function collectPadres(): Promise<Notice[]> {
   const padresAway = game.teams.away.team.id === 135
   const padres = padresAway ? game.teams.away : game.teams.home
   const opponent = padresAway ? game.teams.home : game.teams.away
-  if (game.status.abstractGameState === 'Live') return [{ key: `padres:${game.gamePk}:start`, category: 'padres', title: 'Padres game started', body: `SD ${padres.score ?? 0} · ${opponent.team.name} ${opponent.score ?? 0}`, url: '/?page=padres' }]
-  if (game.status.abstractGameState === 'Final') return [{ key: `padres:${game.gamePk}:final`, category: 'padres', title: 'Padres final', body: `Padres ${padres.score ?? 0}, ${opponent.team.name} ${opponent.score ?? 0}`, url: '/?page=padres' }]
+  if (game.status.abstractGameState === 'Live') return [{ key: `padres:${game.gamePk}:start`, category: 'padres', title: 'Padres game started', body: `SD ${padres.score ?? 0} · ${opponent.team.name} ${opponent.score ?? 0}`, url: '/?page=sports' }]
+  if (game.status.abstractGameState === 'Final') return [{ key: `padres:${game.gamePk}:final`, category: 'padres', title: 'Padres final', body: `Padres ${padres.score ?? 0}, ${opponent.team.name} ${opponent.score ?? 0}`, url: '/?page=sports' }]
   return []
 }
 
@@ -157,8 +157,8 @@ async function collectSoccer(team: { id: string; league: string; key: string; na
   const score = ours.score?.displayValue ?? ours.score ?? 0
   const opponentScore = opponent.score?.displayValue ?? opponent.score ?? 0
   const opponentName = opponent.team?.displayName ?? opponent.team?.name ?? 'Opponent'
-  if (state === 'in') return [{ key: `${team.key}:${event.id}:start`, category: 'padres', title: `${team.name} match started`, body: `${team.name} ${score} · ${opponentName} ${opponentScore}`, url: '/?page=padres' }]
-  if (state === 'post') return [{ key: `${team.key}:${event.id}:final`, category: 'padres', title: `${team.name} final`, body: `${team.name} ${score}, ${opponentName} ${opponentScore}`, url: '/?page=padres' }]
+  if (state === 'in') return [{ key: `${team.key}:${event.id}:start`, category: 'padres', title: `${team.name} match started`, body: `${team.name} ${score} · ${opponentName} ${opponentScore}`, url: '/?page=sports' }]
+  if (state === 'post') return [{ key: `${team.key}:${event.id}:final`, category: 'padres', title: `${team.name} final`, body: `${team.name} ${score}, ${opponentName} ${opponentScore}`, url: '/?page=sports' }]
   return []
 }
 

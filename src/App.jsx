@@ -435,7 +435,6 @@ function usePadres() {
   const [latestGame, setLatestGame] = useState(null)
   const [nextGame, setNextGame] = useState(null)
   const [standing, setStanding] = useState(null)
-  const [boxScore, setBoxScore] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
@@ -445,7 +444,7 @@ function usePadres() {
       if (document.visibilityState === 'hidden') return
       try {
         const res = await fetch(
-          `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${localDateStr()}&teamId=135&hydrate=linescore`
+          `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${localDateStr()}&teamId=135`
         )
         if (!res.ok) throw new Error(`MLB HTTP ${res.status}`)
         const data = await res.json()
@@ -457,11 +456,6 @@ function usePadres() {
           const padresAway = g.teams.away.team.id === 135
           const padresSide = padresAway ? g.teams.away : g.teams.home
           const oppSide = padresAway ? g.teams.home : g.teams.away
-          const innings = (g.linescore?.innings ?? []).map(inn => ({
-            num: inn.num,
-            away: inn.away?.runs ?? null,
-            home: inn.home?.runs ?? null,
-          }))
           setGame({
             gamePk: g.gamePk,
             state: g.status.abstractGameState,
@@ -473,45 +467,11 @@ function usePadres() {
             padresHome: !padresAway,
             venue: g.venue?.name,
             gameDate: g.gameDate,
-            inning: g.linescore?.currentInning,
-            inningOrdinal: g.linescore?.currentInningOrdinal,
-            inningHalf: g.linescore?.inningHalf,
-            outs: g.linescore?.outs,
             wins: padresSide.leagueRecord?.wins,
             losses: padresSide.leagueRecord?.losses,
-            innings,
-            awayHits: g.linescore?.teams?.away?.hits,
-            homeHits: g.linescore?.teams?.home?.hits,
-            awayErrors: g.linescore?.teams?.away?.errors,
-            homeErrors: g.linescore?.teams?.home?.errors,
           })
-
-          try {
-            const bsRes = await fetch(`https://statsapi.mlb.com/api/v1/game/${g.gamePk}/boxscore`)
-            if (bsRes.ok) {
-              const bs = await bsRes.json()
-              function parseBatters(teamData) {
-                return (teamData.battingOrder ?? []).map(id => {
-                  const p = teamData.players[`ID${id}`]
-                  if (!p) return null
-                  const bat = p.stats?.batting ?? {}
-                  const name = p.person.fullName?.split(' ').slice(1).join(' ') ?? p.person.fullName ?? '?'
-                  return { name, pos: p.position?.abbreviation ?? '', ab: bat.atBats ?? 0, r: bat.runs ?? 0, h: bat.hits ?? 0, rbi: bat.rbi ?? 0, bb: bat.baseOnBalls ?? 0, so: bat.strikeOuts ?? 0 }
-                }).filter(Boolean)
-              }
-              setBoxScore({
-                awayBatters: parseBatters(bs.teams.away),
-                homeBatters: parseBatters(bs.teams.home),
-                decisions: bs.decisions ?? null,
-              })
-            }
-          } catch {
-            // Box score details are optional; the game summary can still render.
-          }
-
         } else {
           setGame(null)
-          setBoxScore(null)
           const weekAgo = new Date()
           weekAgo.setDate(weekAgo.getDate() - 7)
           const yesterday = new Date()
@@ -521,7 +481,7 @@ function usePadres() {
           const nextWeek = new Date()
           nextWeek.setDate(nextWeek.getDate() + 7)
           const [recentRes, nRes] = await Promise.all([
-            fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=135&hydrate=linescore&startDate=${localDateStr(weekAgo)}&endDate=${localDateStr(yesterday)}`),
+            fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=135&startDate=${localDateStr(weekAgo)}&endDate=${localDateStr(yesterday)}`),
             fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=135&startDate=${localDateStr(tomorrow)}&endDate=${localDateStr(nextWeek)}`),
           ])
           if (recentRes.ok) {
@@ -593,37 +553,13 @@ function usePadres() {
     return () => clearInterval(id)
   }, [])
 
-  return { game, latestGame, nextGame, standing, boxScore, loading, error, lastUpdated }
+  return { game, latestGame, nextGame, standing, loading, error, lastUpdated }
 }
 
 const SOCCER_TEAMS = [
   { key: 'wave', name: 'San Diego Wave', shortName: 'Wave', league: 'NWSL', leagueSlug: 'usa.nwsl', teamId: '21423' },
   { key: 'sdfc', name: 'San Diego FC', shortName: 'SDFC', league: 'MLS', leagueSlug: 'usa.1', teamId: '22529' },
 ]
-
-function compactDate(date) {
-  return date.toISOString().slice(0, 10).replaceAll('-', '')
-}
-
-function parseSoccerEvent(event, teamId) {
-  const competition = event.competitions?.[0]
-  const competitors = competition?.competitors ?? []
-  const team = competitors.find(entry => String(entry.team?.id) === teamId)
-  const opponent = competitors.find(entry => String(entry.team?.id) !== teamId)
-  if (!team || !opponent) return null
-  return {
-    id: event.id,
-    date: event.date,
-    state: competition.status?.type?.state ?? event.status?.type?.state,
-    status: competition.status?.type?.shortDetail ?? event.status?.type?.shortDetail ?? 'Scheduled',
-    home: team.homeAway === 'home',
-    score: team.score?.displayValue ?? team.score ?? null,
-    opponentScore: opponent.score?.displayValue ?? opponent.score ?? null,
-    opponent: opponent.team?.displayName ?? opponent.team?.name ?? 'Opponent',
-    opponentAbbr: opponent.team?.abbreviation ?? teamAbbr(opponent.team?.displayName),
-    venue: competition.venue?.fullName ?? null,
-  }
-}
 
 function useSoccerScores() {
   const [teams, setTeams] = useState([])
@@ -635,26 +571,11 @@ function useSoccerScores() {
     async function load() {
       if (document.visibilityState === 'hidden') return
       try {
-        const start = new Date(Date.now() - 24 * 60 * 60 * 1000)
-        const end = new Date(Date.now() + 120 * 24 * 60 * 60 * 1000)
-        const results = await Promise.all(SOCCER_TEAMS.map(async config => {
-          const scheduleUrl = `https://site.api.espn.com/apis/site/v2/sports/soccer/${config.leagueSlug}/teams/${config.teamId}/schedule`
-          const futureUrl = `https://site.api.espn.com/apis/site/v2/sports/soccer/${config.leagueSlug}/scoreboard?dates=${compactDate(start)}-${compactDate(end)}&limit=100`
-          const [scheduleResponse, futureResponse] = await Promise.all([fetch(scheduleUrl), fetch(futureUrl)])
-          if (!scheduleResponse.ok || !futureResponse.ok) throw new Error(`${config.league} scores unavailable`)
-          const [schedule, future] = await Promise.all([scheduleResponse.json(), futureResponse.json()])
-          const events = [...(schedule.events ?? []), ...(future.events ?? [])]
-            .filter((event, index, all) => all.findIndex(item => item.id === event.id) === index)
-            .map(event => parseSoccerEvent(event, config.teamId))
-            .filter(Boolean)
-          const live = events.find(event => event.state === 'in') ?? null
-          const latest = events.filter(event => event.state === 'post').sort((a, b) => new Date(b.date) - new Date(a.date))[0] ?? null
-          const next = events.filter(event => event.state === 'pre' && new Date(event.date) >= start).sort((a, b) => new Date(a.date) - new Date(b.date))[0] ?? null
-          return { ...config, logo: schedule.team?.logo, record: schedule.team?.recordSummary, standing: schedule.team?.standingSummary, live, latest, next }
-        }))
-        setTeams(results)
-        setError(null)
-        setLastUpdated(new Date())
+        const { data, error: functionError } = await supabase.functions.invoke('sports')
+        if (functionError) throw new Error(functionError.message)
+        setTeams(data?.teams ?? [])
+        setError(data?.error ?? null)
+        setLastUpdated(data?.updatedAt ? new Date(data.updatedAt) : new Date())
       } catch (loadError) {
         setError(loadError.message)
       } finally {
@@ -676,7 +597,7 @@ const pages = [
   { id: 'weather', label: 'Weather', icon: 'weather' },
   { id: 'fire', label: 'Safety', icon: 'safety' },
   { id: 'flights', label: 'Flights', icon: 'flights' },
-  { id: 'padres', label: 'Sports', icon: 'sports' },
+  { id: 'sports', label: 'Sports', icon: 'sports' },
   { id: 'keg', label: 'Keg', icon: 'keg' },
   { id: 'house', label: 'Settings', icon: 'settings' },
 ]
@@ -810,7 +731,8 @@ function Dashboard({ session }) {
   const [time, setTime] = useState(new Date())
   const [headerCompact, setHeaderCompact] = useState(false)
   const [activePage, setActivePage] = useState(() => {
-    const requested = new URLSearchParams(window.location.search).get('page')
+    const requestedPage = new URLSearchParams(window.location.search).get('page')
+    const requested = requestedPage === 'padres' ? 'sports' : requestedPage
     return pages.some(page => page.id === requested) ? requested : 'home'
   })
   const [moreOpen, setMoreOpen] = useState(false)
@@ -902,7 +824,7 @@ function Dashboard({ session }) {
       {activePage === 'weather' && <WeatherPage weatherData={weatherData} />}
       {activePage === 'fire' && <SafetyPage fireData={fireData} safetyData={safetyData} />}
       {activePage === 'flights' && <FlightsPage flightData={flightData} />}
-      {activePage === 'padres' && <SportsPage padresData={padresData} soccerData={soccerData} />}
+      {activePage === 'sports' && <SportsPage padresData={padresData} soccerData={soccerData} />}
       {activePage === 'keg' && <KegPage kegData={kegData} />}
       {activePage === 'house' && <HousePage session={session} />}
     </main>
@@ -996,7 +918,7 @@ function HomePage({ now, onNavigate, flightData, fireData, safetyData, padresDat
         </div>
       </div>
 
-      <div className="card accent-sport homeSecondary" onClick={() => onNavigate('padres')}>
+      <div className="card accent-sport homeSecondary" onClick={() => onNavigate('sports')}>
         <p className="cardLabel">San Diego sports</p>
         <h2>
           {padresLoading
@@ -1779,263 +1701,6 @@ function SportsPage({ padresData, soccerData }) {
       {loading && SOCCER_TEAMS.map(team => <div className="card accent-sport soccerCard" key={team.key}><p className="cardLabel">{team.league}</p><h2>Loading {team.shortName}…</h2></div>)}
       {!loading && teams.map(team => <SoccerScoreCard team={team} key={team.key} />)}
       {error && <div className="card wideCard"><p className="placeholderText" style={{ color: 'var(--status-alert)' }}>Soccer scores are temporarily unavailable: {error}</p></div>}
-    </section>
-  )
-}
-
-export function PadresDetails({ padresData }) {
-  const { game, nextGame, boxScore, loading, error, lastUpdated } = padresData
-  const isLive = game?.state === 'Live'
-  const isFinal = game?.state === 'Final'
-  const isPreview = game?.state === 'Preview'
-  const padresAhead = game && game.padresScore > game.opponentScore
-  const padresBehind = game && game.padresScore < game.opponentScore
-  const record = game ?? nextGame
-  const gameTime = game?.gameDate
-    ? new Date(game.gameDate).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-    : null
-  const padresBatters = game ? (game.padresAway ? boxScore?.awayBatters : boxScore?.homeBatters) : null
-  const oppBatters = game ? (game.padresAway ? boxScore?.homeBatters : boxScore?.awayBatters) : null
-
-  return (
-    <section className="pageGrid">
-      {/* Main game / score card */}
-      <div className="card wideCard accent-sport padresCard">
-        <div className="cardHeaderRow">
-          <div>
-            <p className="cardLabel">San Diego Padres</p>
-            <h2 className="padresTitle">
-              {loading ? 'Loading…'
-                : error ? 'Unavailable'
-                : !game && !nextGame ? 'Off day'
-                : isPreview ? `${game.padresHome ? 'vs' : '@'} ${game.opponent}`
-                : isLive ? `Live — ${game.inningHalf === 'Bottom' ? '▾' : '▴'} ${game.inningOrdinal}`
-                : isFinal ? `Final — SD ${game.padresScore}, ${teamAbbr(game.opponent)} ${game.opponentScore}`
-                : `Next: vs ${nextGame.opponent}`}
-            </h2>
-          </div>
-          {lastUpdated && (
-            <span className="cardMeta">
-              Updated {lastUpdated.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
-            </span>
-          )}
-        </div>
-
-        {game && !isPreview && (
-          <div className="scoreBoard">
-            <div className={`scoreTeam ${padresAhead ? 'leading' : ''}`}>
-              <span className="scoreTeamCity">San Diego</span>
-              <span className="scoreTeamName">Padres</span>
-              <span className={`scoreRun ${padresAhead ? 'scoreWin' : ''}`}>{game.padresScore}</span>
-            </div>
-            <div className="scoreDivider">
-              <span className={`gameStatePill ${isLive ? 'live' : ''}`}>{isLive ? 'Live' : 'Final'}</span>
-              <strong>{isLive ? `${game.inningHalf === 'Bottom' ? 'Bottom' : 'Top'} ${game.inningOrdinal}` : 'Final'}</strong>
-              {isLive && <span>{game.outs} out{game.outs !== 1 ? 's' : ''}</span>}
-            </div>
-            <div className={`scoreTeam ${padresBehind ? 'leading' : ''}`}>
-              <span className="scoreTeamCity">{game.opponent}</span>
-              <span className="scoreTeamName">{teamAbbr(game.opponent)}</span>
-              <span className={`scoreRun ${padresBehind ? 'scoreWin' : ''}`}>{game.opponentScore}</span>
-            </div>
-          </div>
-        )}
-
-        {game && isPreview && (
-          <div className="pregameBoard">
-            <div>
-              <span className="scoreTeamCity">{game.padresHome ? game.opponent : 'San Diego Padres'}</span>
-              <strong>{game.padresHome ? teamAbbr(game.opponent) : 'SD'}</strong>
-            </div>
-            <span className="gameStatePill">First pitch {gameTime}</span>
-            <div>
-              <span className="scoreTeamCity">{game.padresHome ? 'San Diego Padres' : game.opponent}</span>
-              <strong>{game.padresHome ? 'SD' : teamAbbr(game.opponent)}</strong>
-            </div>
-          </div>
-        )}
-
-        {/* Line score */}
-        {game && !isPreview && game.innings?.length > 0 && (
-          <div className="lineScore">
-            <div className="lineScoreRow lineScoreHeader">
-              <span className="lineScoreTeam" />
-              {game.innings.map(i => <span key={i.num} className="lineScoreCell">{i.num}</span>)}
-              <span className="lineScoreCell lineScoreStat">R</span>
-              <span className="lineScoreCell lineScoreStat">H</span>
-              <span className="lineScoreCell lineScoreStat">E</span>
-            </div>
-            <div className="lineScoreRow">
-              <span className="lineScoreTeam">{teamAbbr(game.opponent)}</span>
-              {game.innings.map(i => <span key={i.num} className="lineScoreCell">{i.away ?? '—'}</span>)}
-              <span className="lineScoreCell lineScoreStat">{game.opponentScore}</span>
-              <span className="lineScoreCell lineScoreStat">{game.padresAway ? game.homeHits ?? '—' : game.awayHits ?? '—'}</span>
-              <span className="lineScoreCell lineScoreStat">{game.padresAway ? game.homeErrors ?? '—' : game.awayErrors ?? '—'}</span>
-            </div>
-            <div className="lineScoreRow">
-              <span className="lineScoreTeam">SD</span>
-              {game.innings.map((i, idx) => (
-                <span key={i.num} className="lineScoreCell">
-                  {i.home === null && idx === game.innings.length - 1 && isFinal ? 'x' : i.home ?? '—'}
-                </span>
-              ))}
-              <span className="lineScoreCell lineScoreStat">{game.padresScore}</span>
-              <span className="lineScoreCell lineScoreStat">{game.padresAway ? game.awayHits ?? '—' : game.homeHits ?? '—'}</span>
-              <span className="lineScoreCell lineScoreStat">{game.padresAway ? game.awayErrors ?? '—' : game.homeErrors ?? '—'}</span>
-            </div>
-          </div>
-        )}
-
-        {game && isLive && (
-          <div className="statusRow" style={{ marginTop: 8 }}>
-            <span>Situation</span>
-            <strong>{game.inningHalf} of {game.inningOrdinal} · {game.outs} out{game.outs !== 1 ? 's' : ''}</strong>
-          </div>
-        )}
-        {game && isPreview && (
-          <div className="statusRow">
-            <span>First pitch</span>
-            <strong>{gameTime}</strong>
-          </div>
-        )}
-        {game && (
-          <div className="statusRow">
-            <span>Venue</span>
-            <strong>{game.padresHome ? 'Petco Park · San Diego' : game.venue}</strong>
-          </div>
-        )}
-        {boxScore?.decisions && (
-          <div className="statusRow">
-            <span>Decisions</span>
-            <strong style={{ fontSize: 12, gap: 12, display: 'inline-flex', flexWrap: 'wrap' }}>
-              {boxScore.decisions.winner && <span>W: {boxScore.decisions.winner.fullName}</span>}
-              {boxScore.decisions.loser && <span>L: {boxScore.decisions.loser.fullName}</span>}
-              {boxScore.decisions.save && <span>SV: {boxScore.decisions.save.fullName}</span>}
-            </strong>
-          </div>
-        )}
-        {!game && nextGame && (
-          <>
-            <div className="statusRow">
-              <span>Next game</span>
-              <strong>
-                {new Date(nextGame.gameDate).toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}
-                {' · '}
-                {new Date(nextGame.gameDate).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-              </strong>
-            </div>
-            <div className="statusRow">
-              <span>Opponent</span>
-              <strong>{nextGame.padresHome ? 'vs' : '@'} {nextGame.opponent}</strong>
-            </div>
-            <div className="statusRow">
-              <span>Venue</span>
-              <strong>{nextGame.padresHome ? 'Petco Park · San Diego' : nextGame.venue}</strong>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* SD box score */}
-      {padresBatters && padresBatters.length > 0 && (
-        <div className="card wideCard accent-sport">
-          <p className="cardLabel">SD Padres — batting</p>
-          <h2 style={{ marginBottom: 4 }}>Box score</h2>
-          <div className="flightList">
-            <div className="flightRow boxRow flightHeader">
-              <span>Batter</span>
-              <span className="boxNum">AB</span>
-              <span className="boxNum">R</span>
-              <span className="boxNum">H</span>
-              <span className="boxNum">RBI</span>
-              <span className="boxNum">BB</span>
-              <span className="boxNum">SO</span>
-            </div>
-            {padresBatters.map((b, i) => (
-              <div key={i} className="flightRow boxRow">
-                <span className="flightIdent">{b.name} <span className="flightType">{b.pos}</span></span>
-                <span className="boxNum">{b.ab}</span>
-                <span className="boxNum">{b.r}</span>
-                <span className="boxNum">{b.h}</span>
-                <span className="boxNum">{b.rbi}</span>
-                <span className="boxNum">{b.bb}</span>
-                <span className="boxNum">{b.so}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Opponent box score */}
-      {oppBatters && oppBatters.length > 0 && (
-        <div className="card wideCard accent-sport">
-          <p className="cardLabel">{game.opponent} — batting</p>
-          <h2 style={{ marginBottom: 4 }}>Box score</h2>
-          <div className="flightList">
-            <div className="flightRow boxRow flightHeader">
-              <span>Batter</span>
-              <span className="boxNum">AB</span>
-              <span className="boxNum">R</span>
-              <span className="boxNum">H</span>
-              <span className="boxNum">RBI</span>
-              <span className="boxNum">BB</span>
-              <span className="boxNum">SO</span>
-            </div>
-            {oppBatters.map((b, i) => (
-              <div key={i} className="flightRow boxRow">
-                <span className="flightIdent">{b.name} <span className="flightType">{b.pos}</span></span>
-                <span className="boxNum">{b.ab}</span>
-                <span className="boxNum">{b.r}</span>
-                <span className="boxNum">{b.h}</span>
-                <span className="boxNum">{b.rbi}</span>
-                <span className="boxNum">{b.bb}</span>
-                <span className="boxNum">{b.so}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="card accent-sport">
-        <p className="cardLabel">Season record</p>
-        <h2>{record?.wins != null ? `${record.wins}–${record.losses}` : '—'}</h2>
-        {record?.wins != null && (
-          <div className="statusRow">
-            <span>Win %</span>
-            <strong>{((record.wins / (record.wins + record.losses)) * 100).toFixed(1)}%</strong>
-          </div>
-        )}
-        <div className="statusRow"><span>Division</span><strong>NL West</strong></div>
-      </div>
-
-      <div className="card accent-sport">
-        <p className="cardLabel">Today</p>
-        <h2>{loading ? '—' : !game ? 'Off day' : game.detailedState}</h2>
-        {game && (
-          <>
-            <div className="statusRow">
-              <span>SD Padres</span>
-              <strong>
-                <span className={`statusDot ${isFinal && padresAhead ? 'good' : isFinal && padresBehind ? 'alert' : isLive && padresAhead ? 'good' : isLive && padresBehind ? 'alert' : 'neutral'}`} />
-                {game.padresScore}
-              </strong>
-            </div>
-            <div className="statusRow">
-              <span>{teamAbbr(game.opponent)}</span>
-              <strong>
-                <span className={`statusDot ${isFinal && padresBehind ? 'good' : isFinal && padresAhead ? 'alert' : isLive && padresBehind ? 'good' : isLive && padresAhead ? 'alert' : 'neutral'}`} />
-                {game.opponentScore}
-              </strong>
-            </div>
-          </>
-        )}
-        {!game && !loading && (
-          <p className="placeholderText" style={{ marginTop: 8 }}>
-            {nextGame ? 'Next game coming up.' : 'No game scheduled.'}
-          </p>
-        )}
-        {error && <p className="placeholderText" style={{ color: 'var(--status-alert)', marginTop: 8 }}>{error}</p>}
-      </div>
     </section>
   )
 }
