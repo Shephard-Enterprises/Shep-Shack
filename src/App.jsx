@@ -544,6 +544,79 @@ function usePadres() {
   return { game, nextGame, boxScore, loading, error, lastUpdated }
 }
 
+const SOCCER_TEAMS = [
+  { key: 'sdfc', name: 'San Diego FC', shortName: 'SDFC', league: 'MLS', leagueSlug: 'usa.1', teamId: '22529' },
+  { key: 'wave', name: 'San Diego Wave', shortName: 'Wave', league: 'NWSL', leagueSlug: 'usa.nwsl', teamId: '21423' },
+]
+
+function compactDate(date) {
+  return date.toISOString().slice(0, 10).replaceAll('-', '')
+}
+
+function parseSoccerEvent(event, teamId) {
+  const competition = event.competitions?.[0]
+  const competitors = competition?.competitors ?? []
+  const team = competitors.find(entry => String(entry.team?.id) === teamId)
+  const opponent = competitors.find(entry => String(entry.team?.id) !== teamId)
+  if (!team || !opponent) return null
+  return {
+    id: event.id,
+    date: event.date,
+    state: competition.status?.type?.state ?? event.status?.type?.state,
+    status: competition.status?.type?.shortDetail ?? event.status?.type?.shortDetail ?? 'Scheduled',
+    home: team.homeAway === 'home',
+    score: team.score?.displayValue ?? team.score ?? null,
+    opponentScore: opponent.score?.displayValue ?? opponent.score ?? null,
+    opponent: opponent.team?.displayName ?? opponent.team?.name ?? 'Opponent',
+    opponentAbbr: opponent.team?.abbreviation ?? teamAbbr(opponent.team?.displayName),
+    venue: competition.venue?.fullName ?? null,
+  }
+}
+
+function useSoccerScores() {
+  const [teams, setTeams] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [lastUpdated, setLastUpdated] = useState(null)
+
+  useEffect(() => {
+    async function load() {
+      if (document.visibilityState === 'hidden') return
+      try {
+        const start = new Date(Date.now() - 24 * 60 * 60 * 1000)
+        const end = new Date(Date.now() + 120 * 24 * 60 * 60 * 1000)
+        const results = await Promise.all(SOCCER_TEAMS.map(async config => {
+          const scheduleUrl = `https://site.api.espn.com/apis/site/v2/sports/soccer/${config.leagueSlug}/teams/${config.teamId}/schedule`
+          const futureUrl = `https://site.api.espn.com/apis/site/v2/sports/soccer/${config.leagueSlug}/scoreboard?dates=${compactDate(start)}-${compactDate(end)}&limit=100`
+          const [scheduleResponse, futureResponse] = await Promise.all([fetch(scheduleUrl), fetch(futureUrl)])
+          if (!scheduleResponse.ok || !futureResponse.ok) throw new Error(`${config.league} scores unavailable`)
+          const [schedule, future] = await Promise.all([scheduleResponse.json(), futureResponse.json()])
+          const events = [...(schedule.events ?? []), ...(future.events ?? [])]
+            .filter((event, index, all) => all.findIndex(item => item.id === event.id) === index)
+            .map(event => parseSoccerEvent(event, config.teamId))
+            .filter(Boolean)
+          const live = events.find(event => event.state === 'in') ?? null
+          const latest = events.filter(event => event.state === 'post').sort((a, b) => new Date(b.date) - new Date(a.date))[0] ?? null
+          const next = events.filter(event => event.state === 'pre' && new Date(event.date) >= start).sort((a, b) => new Date(a.date) - new Date(b.date))[0] ?? null
+          return { ...config, logo: schedule.team?.logo, record: schedule.team?.recordSummary, standing: schedule.team?.standingSummary, live, latest, next }
+        }))
+        setTeams(results)
+        setError(null)
+        setLastUpdated(new Date())
+      } catch (loadError) {
+        setError(loadError.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+    const id = setInterval(load, 60_000)
+    return () => clearInterval(id)
+  }, [])
+
+  return { teams, loading, error, lastUpdated }
+}
+
 // --- App shell ---
 
 const pages = [
@@ -551,7 +624,7 @@ const pages = [
   { id: 'weather', label: 'Weather', icon: 'weather' },
   { id: 'fire', label: 'Safety', icon: 'safety' },
   { id: 'flights', label: 'Flights', icon: 'flights' },
-  { id: 'padres', label: 'Padres', icon: 'baseball' },
+  { id: 'padres', label: 'Sports', icon: 'sports' },
   { id: 'keg', label: 'Keg', icon: 'keg' },
   { id: 'house', label: 'Settings', icon: 'settings' },
 ]
@@ -564,6 +637,7 @@ function NavIcon({ name }) {
     safety: <><path d="M12 3 20 6v5c0 5-3.3 8.3-8 10-4.7-1.7-8-5-8-10V6z"/><path d="M8.5 12.5 11 15l4.8-5"/></>,
     flights: <path d="m3 11 7.2 1.4 7.3-8.1c.8-.9 2.3-.7 2.9.3.4.8.2 1.7-.5 2.3l-6.3 5.8 5 1c.9.2 1.5 1 1.3 1.9-.2.8-.9 1.3-1.7 1.2l-6.9-1.1-3.1 3H5.8l1.8-3.9L3 13.2z"/>,
     baseball: <><circle cx="12" cy="12" r="9"/><path d="M7.2 4.5c1.3 1.4 1.8 3 1.7 4.8M4.5 7.2c1.4.5 2.8 1.4 4.1 2.7M16.8 19.5c-1.3-1.4-1.8-3-1.7-4.8M19.5 16.8c-1.4-.5-2.8-1.4-4.1-2.7"/></>,
+    sports: <><path d="M8 4h8v3.5a4 4 0 0 1-8 0zM10 12v3M14 12v3M8 19h8M10 15h4v4"/><path d="M8 6H4v1.5A3.5 3.5 0 0 0 7.5 11M16 6h4v1.5a3.5 3.5 0 0 1-3.5 3.5"/></>,
     keg: <><path d="M7 3h10l1 4-1 14H7L6 7z"/><path d="M6 7h12M8 11h8M9 3V1h6v2"/></>,
     settings: <><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6"/><circle cx="14" cy="7" r="2"/><circle cx="6" cy="17" r="2"/></>,
     more: <><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></>,
@@ -694,6 +768,7 @@ function Dashboard({ session }) {
   const fireData = useFireWatch()
   const safetyData = useSafetyData()
   const padresData = usePadres()
+  const soccerData = useSoccerScores()
   const kegData = useKegStatus()
 
   useEffect(() => {
@@ -770,12 +845,12 @@ function Dashboard({ session }) {
       </header>
 
       {activePage === 'home' && (
-        <HomePage now={time} onNavigate={setActivePage} flightData={flightData} fireData={fireData} safetyData={safetyData} padresData={padresData} weatherData={weatherData} kegData={kegData} />
+        <HomePage now={time} onNavigate={setActivePage} flightData={flightData} fireData={fireData} safetyData={safetyData} padresData={padresData} soccerData={soccerData} weatherData={weatherData} kegData={kegData} />
       )}
       {activePage === 'weather' && <WeatherPage weatherData={weatherData} />}
       {activePage === 'fire' && <SafetyPage fireData={fireData} safetyData={safetyData} />}
       {activePage === 'flights' && <FlightsPage flightData={flightData} />}
-      {activePage === 'padres' && <PadresPage padresData={padresData} />}
+      {activePage === 'padres' && <SportsPage padresData={padresData} soccerData={soccerData} />}
       {activePage === 'keg' && <KegPage kegData={kegData} />}
       {activePage === 'house' && <HousePage session={session} />}
     </main>
@@ -784,10 +859,11 @@ function Dashboard({ session }) {
 
 // --- Pages ---
 
-function HomePage({ now, onNavigate, flightData, fireData, safetyData, padresData, weatherData, kegData }) {
+function HomePage({ now, onNavigate, flightData, fireData, safetyData, padresData, soccerData, weatherData, kegData }) {
   const { flights, loading: flightsLoading } = flightData
   const { incidents, fires, loading: fireLoading } = fireData
   const { game, nextGame, loading: padresLoading } = padresData
+  const { teams: soccerTeams, loading: soccerLoading } = soccerData
   const { weather, loading: weatherLoading } = weatherData
   const { keg, loading: kegLoading, error: kegError } = kegData
   const closest = flights[0]
@@ -869,7 +945,7 @@ function HomePage({ now, onNavigate, flightData, fireData, safetyData, padresDat
       </div>
 
       <div className="card accent-sport homeSecondary" onClick={() => onNavigate('padres')}>
-        <p className="cardLabel">Padres</p>
+        <p className="cardLabel">San Diego sports</p>
         <h2>
           {padresLoading
             ? 'Loading…'
@@ -884,18 +960,20 @@ function HomePage({ now, onNavigate, flightData, fireData, safetyData, padresDat
             : 'Off day'}
         </h2>
         <div className="statusRow">
-          <span>Status</span>
+          <span>Padres</span>
           <strong>
             <span className={`statusDot ${game?.state === 'Live' ? 'alert' : game ? 'info' : 'neutral'}`} />
             {padresLoading ? '—' : game ? game.detailedState : nextGame ? new Date(nextGame.gameDate).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) : 'No game'}
           </strong>
         </div>
-        <div className="statusRow">
-          <span>Record</span>
-          <strong>
-            {game?.wins != null ? `${game.wins}–${game.losses}` : nextGame?.wins != null ? `${nextGame.wins}–${nextGame.losses}` : '—'}
-          </strong>
-        </div>
+        {soccerLoading && <div className="statusRow"><span>Soccer</span><strong>Loading…</strong></div>}
+        {!soccerLoading && soccerTeams.map(team => {
+          const event = team.live ?? team.latest ?? team.next
+          const summary = team.live || team.latest
+            ? `${event.score}–${event.opponentScore} ${event.opponentAbbr}`
+            : event ? `${event.home ? 'vs' : '@'} ${event.opponentAbbr}` : 'No match'
+          return <div className="statusRow" key={team.key}><span>{team.shortName}</span><strong><span className={`statusDot ${team.live ? 'alert' : 'info'}`} />{summary}</strong></div>
+        })}
       </div>
 
       <div className="card accent-weather homePriority homeWeather" onClick={() => onNavigate('weather')}>
@@ -1566,8 +1644,42 @@ function FlightsPage({ flightData }) {
   )
 }
 
-function PadresPage({ padresData }) {
+function SoccerScoreCard({ team }) {
+  const event = team.live ?? team.latest ?? team.next
+  const hasScore = event && event.state !== 'pre'
+  const gameDate = event ? new Date(event.date) : null
+  return (
+    <div className={`card accent-sport soccerCard ${team.live ? 'isLive' : ''}`}>
+      <div className="soccerTeamHeader">
+        {team.logo && <img src={team.logo} alt="" className="soccerLogo" />}
+        <div><p className="cardLabel">{team.league}</p><h2>{team.name}</h2></div>
+        {team.live && <span className="gameStatePill live">Live</span>}
+      </div>
+      {!event && <p className="placeholderText">No match information available.</p>}
+      {event && hasScore && (
+        <div className="soccerScore">
+          <div><span>{team.shortName}</span><strong>{event.score}</strong></div>
+          <span className="soccerScoreStatus">{team.live ? event.status : 'Final'}</span>
+          <div><span>{event.opponentAbbr}</span><strong>{event.opponentScore}</strong></div>
+        </div>
+      )}
+      {event && !hasScore && (
+        <div className="soccerNext">
+          <span>Next match</span>
+          <strong>{event.home ? 'vs' : '@'} {event.opponent}</strong>
+        </div>
+      )}
+      {event && <div className="statusRow"><span>{hasScore ? 'Played' : 'Kickoff'}</span><strong>{gameDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · {gameDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</strong></div>}
+      <div className="statusRow"><span>Record</span><strong>{team.record ?? '—'}</strong></div>
+      {team.standing && <div className="statusRow"><span>Standing</span><strong>{team.standing}</strong></div>}
+      {team.next && hasScore && <div className="soccerUpcoming"><span>Up next</span><strong>{team.next.home ? 'vs' : '@'} {team.next.opponentAbbr} · {new Date(team.next.date).toLocaleDateString([], { month: 'short', day: 'numeric' })}</strong></div>}
+    </div>
+  )
+}
+
+function SportsPage({ padresData, soccerData }) {
   const { game, nextGame, boxScore, loading, error, lastUpdated } = padresData
+  const { teams: soccerTeams, loading: soccerLoading, error: soccerError, lastUpdated: soccerUpdated } = soccerData
   const isLive = game?.state === 'Live'
   const isFinal = game?.state === 'Final'
   const isPreview = game?.state === 'Preview'
@@ -1582,6 +1694,18 @@ function PadresPage({ padresData }) {
 
   return (
     <section className="pageGrid">
+      <div className="card wideCard sportsIntro">
+        <div>
+          <p className="cardLabel">San Diego teams</p>
+          <h2>Sports scoreboard</h2>
+          <p className="placeholderText">Padres, San Diego FC, and Wave scores in one place.</p>
+        </div>
+        <Freshness date={soccerUpdated ?? lastUpdated} staleAfterMinutes={5} />
+      </div>
+      {soccerLoading && SOCCER_TEAMS.map(team => <div className="card accent-sport soccerCard" key={team.key}><p className="cardLabel">{team.league}</p><h2>Loading {team.shortName}…</h2></div>)}
+      {!soccerLoading && soccerTeams.map(team => <SoccerScoreCard team={team} key={team.key} />)}
+      {soccerError && <div className="card wideCard"><p className="placeholderText" style={{ color: 'var(--status-alert)' }}>Soccer scores are temporarily unavailable: {soccerError}</p></div>}
+
       {/* Main game / score card */}
       <div className="card wideCard accent-sport padresCard">
         <div className="cardHeaderRow">

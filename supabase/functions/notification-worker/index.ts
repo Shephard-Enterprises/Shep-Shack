@@ -141,6 +141,27 @@ async function collectPadres(): Promise<Notice[]> {
   return []
 }
 
+async function collectSoccer(team: { id: string; league: string; key: string; name: string }): Promise<Notice[]> {
+  const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).replaceAll('-', '')
+  const response = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${team.league}/scoreboard?dates=${date}&limit=100`)
+  if (!response.ok) return []
+  const event = (await response.json()).events?.find((candidate: any) =>
+    candidate.competitions?.[0]?.competitors?.some((competitor: any) => String(competitor.team?.id) === team.id)
+  )
+  if (!event) return []
+  const competition = event.competitions?.[0]
+  const ours = competition?.competitors?.find((competitor: any) => String(competitor.team?.id) === team.id)
+  const opponent = competition?.competitors?.find((competitor: any) => String(competitor.team?.id) !== team.id)
+  if (!ours || !opponent) return []
+  const state = competition.status?.type?.state ?? event.status?.type?.state
+  const score = ours.score?.displayValue ?? ours.score ?? 0
+  const opponentScore = opponent.score?.displayValue ?? opponent.score ?? 0
+  const opponentName = opponent.team?.displayName ?? opponent.team?.name ?? 'Opponent'
+  if (state === 'in') return [{ key: `${team.key}:${event.id}:start`, category: 'padres', title: `${team.name} match started`, body: `${team.name} ${score} · ${opponentName} ${opponentScore}`, url: '/?page=padres' }]
+  if (state === 'post') return [{ key: `${team.key}:${event.id}:final`, category: 'padres', title: `${team.name} final`, body: `${team.name} ${score}, ${opponentName} ${opponentScore}`, url: '/?page=padres' }]
+  return []
+}
+
 async function send(notice: Notice) {
   const inserted = await rest('notification_events?on_conflict=event_key', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify({ event_key: notice.key, category: notice.category, title: notice.title, body: notice.body, url: notice.url }) })
   if (!inserted?.length) return 0
@@ -161,7 +182,11 @@ async function send(notice: Notice) {
 Deno.serve(async request => {
   if (request.headers.get('x-worker-secret') !== WORKER_SECRET) return new Response('Unauthorized', { status: 401 })
   webpush.setVapidDetails('mailto:shepshack@localhost', Deno.env.get('VAPID_PUBLIC_KEY')!, Deno.env.get('VAPID_PRIVATE_KEY')!)
-  const groups = await Promise.allSettled([collectKeg(), collectFire(), collectEarthquakes(), collectOfficialAlerts(), collectOpenHouse(), collectPadres()])
+  const groups = await Promise.allSettled([
+    collectKeg(), collectFire(), collectEarthquakes(), collectOfficialAlerts(), collectOpenHouse(), collectPadres(),
+    collectSoccer({ id: '22529', league: 'usa.1', key: 'sdfc', name: 'San Diego FC' }),
+    collectSoccer({ id: '21423', league: 'usa.nwsl', key: 'wave', name: 'San Diego Wave' }),
+  ])
   const notices = groups.flatMap(group => group.status === 'fulfilled' ? group.value : [])
   const sent = (await Promise.all(notices.map(send))).reduce((total, count) => total + count, 0)
   return Response.json({ checked: notices.length, sent })
