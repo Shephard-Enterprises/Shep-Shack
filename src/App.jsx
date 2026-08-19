@@ -796,14 +796,14 @@ function Dashboard({ session }) {
         <button className={`navButton moreNavButton ${activePage === 'house' ? 'active' : ''}`} type="button" onClick={() => setMoreOpen(open => !open)} aria-expanded={moreOpen}>
           <NavIcon name="more" /><span>More</span>
         </button>
-        {moreOpen && (
-          <div className="moreMenu">
-            {pages.filter(page => page.id === 'house').map(page => (
-              <button key={page.id} type="button" onClick={() => { setActivePage(page.id); setMoreOpen(false) }}><NavIcon name={page.icon} />{page.label}</button>
-            ))}
-          </div>
-        )}
       </nav>
+      {moreOpen && (
+        <div className="moreMenu">
+          {pages.filter(page => page.id === 'house').map(page => (
+            <button key={page.id} type="button" onClick={() => { setActivePage(page.id); setMoreOpen(false) }}><NavIcon name={page.icon} />{page.label}</button>
+          ))}
+        </div>
+      )}
 
       {!network.online && <div className="offlineBanner" role="status"><span className="statusDot alert" />Offline · showing the last available readings</div>}
 
