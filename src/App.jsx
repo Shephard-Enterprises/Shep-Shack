@@ -1740,7 +1740,7 @@ function PadresScoreCard({ padresData }) {
   return (
     <div className={`card accent-sport soccerCard ${isLive ? 'isLive' : ''}`}>
       <div className="soccerTeamHeader">
-        <img src="https://www.mlbstatic.com/team-logos/135.svg" alt="" className="soccerLogo" />
+        <img src={`${import.meta.env.BASE_URL}padres.svg`} alt="" className="soccerLogo" />
         <div><p className="cardLabel">MLB</p><h2>San Diego Padres</h2></div>
         {isLive && <span className="gameStatePill live">Live</span>}
       </div>

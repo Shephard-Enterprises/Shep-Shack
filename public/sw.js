@@ -1,6 +1,6 @@
-const CACHE = 'shep-shack-v4'
+const CACHE = 'shep-shack-v5'
 const BASE = new URL(self.registration.scope).pathname.replace(/\/$/, '')
-const SHELL = [`${BASE}/`, `${BASE}/manifest.webmanifest`, `${BASE}/shepshack.png`, `${BASE}/favicon.svg`]
+const SHELL = [`${BASE}/`, `${BASE}/manifest.webmanifest`, `${BASE}/shepshack.png`, `${BASE}/padres.svg`, `${BASE}/favicon.svg`]
 
 function appUrl(path = '/') {
   return `${BASE}/${path.replace(/^\//, '')}`
