@@ -1,0 +1,14 @@
+[functions.flights]
+verify_jwt = true
+
+[functions.fire-watch]
+verify_jwt = true
+
+[functions.keg-ingest]
+verify_jwt = false
+
+[functions.notification-worker]
+verify_jwt = false
+
+[functions.safety-feeds]
+verify_jwt = true

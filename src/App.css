@@ -1,0 +1,1656 @@
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  --bg: #071416;
+  --panel: rgba(13, 31, 34, 0.82);
+  --panel-raised: rgba(19, 43, 46, 0.94);
+  --border: rgba(120, 178, 181, 0.16);
+  --text: #f7f4ec;
+  --text-dim: #a8b9b8;
+  --text-faint: #698380;
+
+  --accent: #ff7400;
+  --accent-dim: #713a15;
+  --teal: #087d89;
+  --teal-bright: #10a7b0;
+
+  --status-good: #5dcaa5;
+  --status-good-dim: #1f3a32;
+  --status-alert: #e0584f;
+  --status-alert-dim: #3a2220;
+  --status-info: #5b9bd9;
+  --status-info-dim: #1f2e3a;
+  --status-sport: #8fbf52;
+  --status-sport-dim: #2a3520;
+  --status-keg: #d6b45f;
+
+  --font-display: 'Archivo', sans-serif;
+  --font-body: 'Inter', sans-serif;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  background-image:
+    radial-gradient(circle at 12% 5%, rgba(8, 125, 137, 0.22), transparent 28rem),
+    radial-gradient(circle at 92% 18%, rgba(255, 116, 0, 0.09), transparent 25rem),
+    linear-gradient(180deg, #071416 0%, #09191b 48%, #061113 100%);
+  background-attachment: fixed;
+}
+
+/* ---------- Private access ---------- */
+
+.authScreen {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: max(20px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+}
+
+.loginCard {
+  width: min(100%, 410px);
+  padding: 28px;
+  background: rgba(11, 31, 34, .9);
+  border: 1px solid rgba(21, 153, 162, .28);
+  border-radius: 26px;
+  box-shadow: 0 30px 80px rgba(0,0,0,.35);
+  backdrop-filter: blur(20px);
+}
+
+.loginLogo { display: block; width: 180px; height: 110px; margin: 0 auto 20px; object-fit: contain; }
+.loginIntro { text-align: center; }
+.loginIntro h1 { margin: 7px 0; font: 700 34px/1 var(--font-display); letter-spacing: -.045em; }
+.loginIntro > p:last-child, .loginHelp { color: var(--text-dim); font-size: 13px; }
+.loginForm { display: grid; gap: 16px; margin-top: 26px; }
+.loginForm label { display: grid; gap: 7px; color: var(--text-dim); font-size: 12px; font-weight: 600; }
+.loginForm input {
+  width: 100%; min-height: 50px; padding: 0 14px; color: var(--text); background: rgba(4,18,20,.65);
+  border: 1px solid var(--border); border-radius: 12px; outline: none; font-size: 16px;
+}
+.loginForm input:focus { border-color: var(--teal-bright); box-shadow: 0 0 0 3px rgba(16,167,176,.13); }
+.loginButton { min-height: 50px; border: 0; border-radius: 12px; color: #241204; background: var(--accent); font-weight: 700; cursor: pointer; }
+.loginButton:disabled { opacity: .65; }
+.textButton { min-height: 44px; border: 0; color: var(--teal-bright); background: transparent; cursor: pointer; font-size: 12px; }
+.resetNotice { margin: 14px 0 0; color: var(--status-good); font-size: 12px; text-align: center; }
+.loginError { margin: -3px 0; color: #ff8f87; font-size: 12px; }
+.loginHelp { margin: 20px 0 0; text-align: center; }
+.authLoader { width: 34px; height: 34px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: authSpin .8s linear infinite; }
+@keyframes authSpin { to { transform: rotate(360deg); } }
+
+.headerActions { display: flex; align-items: center; gap: 8px; }
+.freshness { display: inline-flex; align-items: center; gap: 7px; color: var(--text-dim); font-size: 11px; white-space: nowrap; }
+.freshness.stale { color: #ff9a92; }
+.freshness .statusDot { margin-right: 0; }
+.offlineBanner { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; color: #ffb0aa; background: rgba(78,27,25,.5); border: 1px solid rgba(224,88,79,.3); border-radius: 12px; font-size: 12px; }
+.signOutButton { min-height: 34px; padding: 0 11px; color: var(--text-dim); background: transparent; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; font-size: 11px; }
+.signOutButton:hover { color: var(--text); border-color: var(--text-faint); }
+.notificationControl { position: relative; }
+.notificationButton { position: relative; width: 36px; height: 36px; display: grid; place-items: center; padding: 0; color: var(--text-dim); background: transparent; border: 1px solid var(--border); border-radius: 50%; cursor: pointer; }
+.notificationButton svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.notificationButton.enabled { color: var(--accent); }
+.notificationDot { position: absolute; right: 1px; top: 1px; width: 7px; height: 7px; border-radius: 50%; background: var(--status-good); border: 2px solid var(--bg); }
+.notificationCount { position: absolute; right: -4px; top: -5px; min-width: 17px; height: 17px; display: grid; place-items: center; padding: 0 4px; color: #251204; background: var(--accent); border: 2px solid var(--bg); border-radius: 999px; font-size: 8px; font-weight: 800; }
+.notificationPanel { position: absolute; z-index: 2200; right: 0; top: 44px; width: min(370px, calc(100vw - 24px)); padding: 18px; color: var(--text); background: rgba(8,24,26,.98); border: 1px solid var(--border); border-radius: 17px; box-shadow: 0 24px 60px rgba(0,0,0,.5); }
+.notificationPanel h3 { margin: 5px 0 16px; font: 700 19px/1.2 var(--font-display); }
+.notificationPanel .loginButton { width: 100%; }
+.preferenceRow { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 12px; }
+.preferenceRow input { width: 20px; height: 20px; accent-color: var(--accent); }
+.notificationMessage { margin: 10px 0 0; color: var(--status-good); font-size: 11px; }
+.notificationHint { margin: 12px 0 0; color: var(--text-faint); font-size: 10px; line-height: 1.4; }
+.inboxHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.inboxHeader button { padding: 5px 0; color: var(--teal-bright); background: none; border: 0; cursor: pointer; font-size: 10px; }
+.inboxList { max-height: min(52vh, 410px); margin: 0 -6px; overflow-y: auto; }
+.inboxItem { position: relative; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; padding: 11px 6px; color: var(--text); border-top: 1px solid var(--border); text-decoration: none; }
+.inboxItem.unread::before { content: ''; position: absolute; left: -5px; top: 18px; width: 5px; height: 5px; background: var(--accent); border-radius: 50%; }
+.inboxIcon { width: 31px; height: 31px; display: grid; place-items: center; color: var(--teal-bright); background: rgba(16,167,176,.1); border-radius: 9px; font: 700 10px var(--font-display); text-transform: uppercase; }
+.inboxItem strong, .inboxItem small, .inboxItem time { display: block; }
+.inboxItem strong { margin-bottom: 3px; font-size: 12px; }
+.inboxItem small { color: var(--text-dim); font-size: 10px; line-height: 1.35; }
+.inboxItem time { margin-top: 4px; color: var(--text-faint); font-size: 9px; }
+.notificationEmpty { padding: 24px 8px; color: var(--text-dim); text-align: center; font-size: 12px; }
+.inboxSettingsButton { width: 100%; margin-top: 6px; border-top: 1px solid var(--border); }
+.notificationSettings h3 { margin: 5px 0 16px; font: 700 19px/1.2 var(--font-display); }
+.notificationSettings .loginButton { width: 100%; }
+.accountCard h2 { overflow-wrap: anywhere; }
+.accountSignOut { width: 100%; min-height: 44px; margin-top: 14px; }
+
+.dashboard {
+  width: min(100%, 1480px);
+  margin: 0 auto;
+  min-height: 100vh;
+  padding: 24px clamp(18px, 3vw, 42px) 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ---------- Hero ---------- */
+
+.heroCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(18px, 4vw, 48px);
+  min-height: 170px;
+  padding: 18px clamp(18px, 3vw, 34px);
+  overflow: hidden;
+  position: relative;
+  background: linear-gradient(115deg, rgba(7, 51, 56, 0.94), rgba(11, 29, 32, 0.88));
+  border: 1px solid rgba(21, 153, 162, 0.25);
+  border-radius: 28px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24), inset 0 1px rgba(255,255,255,.035);
+}
+
+.heroCard::after {
+  content: '';
+  position: absolute;
+  width: 360px;
+  height: 360px;
+  right: -100px;
+  top: -160px;
+  border: 1px solid rgba(255, 116, 0, 0.16);
+  border-radius: 50%;
+  box-shadow: 0 0 0 50px rgba(255,116,0,.025), 0 0 0 100px rgba(8,125,137,.025);
+  pointer-events: none;
+}
+
+.logoPanel {
+  grid-column: 1;
+  justify-self: start;
+  background: none;
+  border: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none;
+}
+
+.houseLogo {
+  width: clamp(180px, 21vw, 285px);
+  height: 142px;
+  object-fit: contain;
+  object-position: left center;
+  display: block;
+}
+
+.heroInfo {
+  grid-column: 2;
+  text-align: right;
+  justify-self: end;
+}
+
+.heroInfo h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(42px, 5vw, 68px);
+  line-height: 1;
+  margin: 0;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.055em;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.4);
+}
+
+.locationBadge, .systemStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.locationBadge { margin-bottom: 9px; }
+.liveDot { width: 7px; height: 7px; border-radius: 50%; background: var(--teal-bright); box-shadow: 0 0 0 4px rgba(16,167,176,.12); }
+
+.date {
+  font-size: 15px;
+  color: var(--text-dim);
+  margin: 6px 0 14px;
+}
+
+.weatherPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(4, 18, 20, 0.42);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.weatherPill span {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--text);
+}
+
+/* ---------- Nav ---------- */
+
+.topNav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  justify-content: flex-start;
+  padding: 7px;
+  background: rgba(8, 24, 26, .75);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  backdrop-filter: blur(18px);
+}
+
+.navButton {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  padding: 10px 15px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.navButton:hover {
+  border-color: var(--text-faint);
+  color: var(--text);
+}
+
+.navButton.active {
+  background: linear-gradient(135deg, #ff7c12, var(--accent));
+  border-color: rgba(255,255,255,.12);
+  color: #201104;
+  box-shadow: 0 8px 22px rgba(255, 116, 0, .18);
+}
+
+.navIcon { width: 17px; height: 17px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.moreNavButton, .moreMenu { display: none; }
+.pageHeading { display: flex; align-items: end; justify-content: space-between; padding: 4px 2px 0; }
+.pageHeading h2 { margin: 3px 0 0; font-family: var(--font-display); font-size: clamp(25px, 3vw, 34px); letter-spacing: -.035em; }
+.pageEyebrow { margin: 0; color: var(--accent); font-size: 10px; line-height: 1.2; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
+.systemStatus { padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px; background: rgba(8,24,26,.64); }
+
+@media (max-width: 760px) {
+  .dashboard {
+    padding-top: 20px;
+    gap: 20px;
+  }
+
+  .heroCard {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 16px;
+    min-height: 0;
+    padding: 18px;
+    text-align: center;
+  }
+
+  .logoPanel {
+    order: -1;
+  }
+
+  .heroInfo {
+    grid-column: auto;
+    justify-self: center;
+    text-align: center;
+  }
+
+  .houseLogo {
+    width: min(68vw, 250px);
+    height: 126px;
+  }
+
+  .date {
+    margin-bottom: 12px;
+  }
+
+  .weatherPill {
+    max-width: min(100%, 340px);
+    justify-content: center;
+  }
+
+  .topNav {
+    justify-content: flex-start;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 12px;
+  }
+
+  .navButton {
+    flex: 0 0 auto;
+  }
+}
+
+/* ---------- Grids ---------- */
+
+.grid,
+.pageGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.homeGrid {
+  align-items: stretch;
+}
+
+.needsAttention { overflow: hidden; background: linear-gradient(135deg, rgba(224,88,79,.12), rgba(13,31,34,.84) 48%); border: 1px solid rgba(224,88,79,.28); border-radius: 20px; box-shadow: 0 16px 45px rgba(0,0,0,.14); }
+.attentionHeading { display: flex; align-items: center; justify-content: space-between; padding: 17px 20px 12px; }
+.attentionHeading h2 { margin: 2px 0 0; font: 700 21px/1.1 var(--font-display); }
+.attentionHeading > span { min-width: 27px; height: 27px; display: grid; place-items: center; color: #2a1305; background: var(--accent); border-radius: 999px; font-size: 11px; font-weight: 800; }
+.attentionList { display: grid; }
+.attentionList button { width: 100%; min-height: 56px; display: grid; grid-template-columns: 8px minmax(0, 1fr) 16px; align-items: center; gap: 12px; padding: 10px 20px; color: var(--text); background: transparent; border: 0; border-top: 1px solid var(--border); text-align: left; cursor: pointer; }
+.attentionList button:hover { background: rgba(255,255,255,.025); }
+.attentionList strong, .attentionList small { display: block; }
+.attentionList strong { margin-bottom: 3px; font-size: 13px; }
+.attentionList small { color: var(--text-dim); font-size: 11px; }
+.attentionList b { color: var(--text-faint); font-size: 20px; font-weight: 400; }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--border);
+  border-radius: 20px;
+  padding: 22px 24px;
+  cursor: pointer;
+  box-shadow: 0 16px 45px rgba(0,0,0,.13), inset 0 1px rgba(255,255,255,.025);
+  backdrop-filter: blur(16px);
+  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease, box-shadow .2s ease;
+}
+
+.card:hover {
+  background: var(--panel-raised);
+  transform: translateY(-3px);
+  box-shadow: 0 22px 52px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.04);
+}
+
+.card.wideCard {
+  grid-column: 1 / -1;
+  cursor: default;
+}
+
+.card.wideCard:hover {
+  transform: none;
+  background: var(--panel);
+}
+
+@media (min-width: 761px) and (max-width: 1180px) {
+  .dashboard {
+    min-height: 100svh;
+    padding: 16px 22px 18px;
+    gap: 12px;
+  }
+
+  .heroCard {
+    min-height: 136px;
+    gap: 24px;
+  }
+
+  .logoPanel {
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .houseLogo {
+    width: clamp(132px, 17vw, 170px);
+    height: 105px;
+  }
+
+  .heroInfo h1 {
+    font-size: clamp(34px, 5vw, 48px);
+  }
+
+  .date {
+    margin: 4px 0 8px;
+    font-size: 13px;
+  }
+
+  .weatherPill {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .topNav {
+    padding-bottom: 10px;
+  }
+
+  .navButton {
+    padding: 7px 13px;
+    font-size: 12px;
+  }
+
+  .homeGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .homeGrid .card {
+    min-height: 132px;
+    padding: 13px 15px;
+    border-radius: var(--radius-md);
+  }
+
+  .homeGrid .card h2 {
+    margin-bottom: 8px;
+    font-size: 17px;
+    line-height: 1.15;
+  }
+
+  .homeGrid .cardLabel {
+    margin-bottom: 5px;
+    font-size: 10px;
+  }
+
+  .homeGrid .statusRow {
+    padding: 6px 0;
+    font-size: 12px;
+    gap: 10px;
+  }
+}
+
+/* Category accents key each live data source. */
+.card.accent-fire { border-top-color: var(--status-alert); }
+.card.accent-air { border-top-color: var(--teal-bright); }
+.card.accent-quake { border-top-color: var(--status-keg); }
+.card.accent-flights { border-top-color: var(--status-info); }
+.card.accent-sport { border-top-color: var(--status-sport); }
+.card.accent-weather { border-top-color: var(--accent); }
+.card.accent-house { border-top-color: var(--teal-bright); }
+.card.accent-keg { border-top-color: var(--status-keg); }
+
+.cardLabel {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0 0 6px;
+}
+
+.card h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 19px;
+  margin: 0 0 14px;
+  color: var(--text);
+}
+
+.placeholderText {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  margin: 0;
+}
+
+.list p {
+  font-size: 14px;
+  color: var(--text-dim);
+  margin: 0 0 8px;
+  padding-left: 14px;
+  border-left: 2px solid var(--border);
+}
+
+.list p:last-child {
+  margin-bottom: 0;
+}
+
+.statusRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: var(--text-dim);
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+}
+
+.statusRow:first-of-type {
+  border-top: none;
+}
+
+.statusRow strong {
+  font-weight: 600;
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---------- Safety ---------- */
+.safetyMetric { cursor: default; }
+.safetyMetric:hover { transform: none; }
+.safetyMetric h2 { margin-bottom: 10px; }
+.safetyVerdict { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; color: var(--text-dim); font-size: 13px; }
+.dataSource { color: var(--text-faint); font-size: 10px; font-weight: 700; letter-spacing: .12em; }
+.quakeList { display: grid; margin-top: 8px; }
+.quakeRow { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 44px; color: var(--text-dim); border-top: 1px solid var(--border); text-decoration: none; font-size: 11px; }
+.quakeRow strong { color: var(--status-keg); font-family: var(--font-display); font-size: 15px; }
+.quakeRow time { color: var(--text-faint); white-space: nowrap; }
+.quakeRow:hover span { color: var(--text); }
+.safetyError { color: #ff9a92; font-size: 12px; }
+.safetyAlertCard { cursor: default; border-top: 2px solid var(--status-good); }
+.safetyAlertCard:hover { transform: none; }
+.safetyAlertCard.active { border-top-color: var(--status-alert); background: linear-gradient(135deg, rgba(224,88,79,.12), transparent 45%), var(--panel); }
+.officialAlertList { display: grid; margin-top: 10px; }
+.officialAlert { display: grid; grid-template-columns: minmax(130px, .45fr) minmax(0, 1.5fr) auto; align-items: center; gap: 12px; padding: 12px 0; color: var(--text-dim); border-top: 1px solid var(--border); text-decoration: none; font-size: 12px; }
+.officialAlert strong { color: #ff9a92; font-family: var(--font-display); }
+.officialAlert time { color: var(--text-faint); white-space: nowrap; }
+
+/* status dot — pulses only for alerts, restraint everywhere else */
+.statusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.statusDot.good { background: var(--status-good); }
+.statusDot.alert {
+  background: var(--status-alert);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.statusDot.info { background: var(--status-info); }
+.statusDot.neutral { background: var(--text-faint); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.buttonGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.buttonGrid button {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.buttonGrid button:hover {
+  border-color: var(--accent);
+}
+
+.primaryAction {
+  width: 100%;
+  margin-top: 14px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1304;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
+  cursor: pointer;
+  transition: filter 0.15s ease, opacity 0.15s ease;
+}
+
+.primaryAction:hover {
+  filter: brightness(1.05);
+}
+
+.primaryAction:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+/* ---------- Keg ---------- */
+
+.kegHero {
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(214, 180, 95, 0.12), transparent 42%),
+    var(--panel);
+}
+
+.kegHeroBody {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) 1fr;
+  gap: clamp(20px, 4vw, 44px);
+  align-items: center;
+  padding-top: 10px;
+}
+
+.kegGauge {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+}
+
+.kegGlass {
+  position: relative;
+  width: min(100%, 220px);
+  aspect-ratio: 0.68;
+  overflow: hidden;
+  border: 2px solid rgba(244, 242, 236, 0.32);
+  border-top-width: 8px;
+  border-radius: 14px 14px 26px 26px;
+  background: rgba(244, 242, 236, 0.06);
+  box-shadow:
+    inset 18px 0 34px rgba(255, 255, 255, 0.06),
+    inset -18px 0 34px rgba(0, 0, 0, 0.18),
+    0 18px 40px rgba(0, 0, 0, 0.22);
+}
+
+.kegBeer {
+  position: absolute;
+  inset: auto 8px 8px;
+  height: var(--keg-level);
+  border-radius: 8px 8px 18px 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 224, 142, 0.92), rgba(186, 126, 31, 0.96));
+  transition: height 0.4s ease;
+}
+
+.kegFoam {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: calc(var(--keg-level) + 2px);
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(244, 242, 236, 0.86);
+  box-shadow:
+    22px 2px 0 -2px rgba(244, 242, 236, 0.72),
+    58px -1px 0 -3px rgba(244, 242, 236, 0.68);
+}
+
+.kegGauge span {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 44px;
+  line-height: 1;
+  color: var(--status-keg);
+  font-variant-numeric: tabular-nums;
+}
+
+.kegReadout {
+  min-width: 0;
+}
+
+.kegVerdict {
+  max-width: 560px;
+  margin: 0 0 18px;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: clamp(26px, 4vw, 48px);
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.kegPints {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0 0 8px;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: clamp(54px, 8vw, 92px);
+  font-weight: 700;
+  line-height: 0.95;
+  font-variant-numeric: tabular-nums;
+}
+
+.kegPints span {
+  color: var(--text-dim);
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+@media (max-width: 760px) {
+  .kegHeroBody {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .kegGlass {
+    width: min(62vw, 180px);
+  }
+
+  .kegPints {
+    justify-content: center;
+  }
+}
+
+/* ---------- Flights ---------- */
+
+.cardHeaderRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.cardHeaderRow h2 {
+  margin-bottom: 8px;
+}
+
+.cardMeta {
+  font-size: 11px;
+  color: var(--text-faint);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  padding-top: 4px;
+}
+
+.flightList {
+  margin-top: 8px;
+}
+
+.flightRow {
+  display: grid;
+  grid-template-columns: 90px 1fr 1fr 80px 72px;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.flightHeader {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding-top: 0;
+  border-top: none;
+}
+
+.flightIdent {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.flightType {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.flightDistCol {
+  text-align: right;
+}
+
+.flightDist {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--status-info);
+}
+
+.radarLayout {
+  display: grid;
+  grid-template-columns: minmax(280px, 460px) minmax(240px, 1fr);
+  gap: 20px;
+  align-items: stretch;
+  margin-top: 20px;
+}
+
+.radarScope {
+  position: relative;
+  aspect-ratio: 1;
+  width: min(100%, 460px);
+  min-height: 0;
+  justify-self: center;
+  overflow: hidden;
+  border: 1px solid rgba(93, 202, 165, 0.42);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, rgba(93, 202, 165, 0.16) 0 1px, transparent 2px),
+    repeating-radial-gradient(circle at center, transparent 0 24.5%, rgba(93, 202, 165, 0.28) 25%, transparent 25.5%),
+    linear-gradient(rgba(93, 202, 165, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(93, 202, 165, 0.08) 1px, transparent 1px),
+    #07100d;
+  background-size: auto, auto, 32px 32px, 32px 32px, auto;
+  box-shadow:
+    inset 0 0 60px rgba(93, 202, 165, 0.12),
+    0 20px 50px rgba(0, 0, 0, 0.28);
+}
+
+.radarScope::after {
+  content: '';
+  position: absolute;
+  inset: 7%;
+  border: 1px solid rgba(93, 202, 165, 0.18);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.radarSweep {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  transform-origin: 50% 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(93, 202, 165, 0.42) 0deg,
+    rgba(93, 202, 165, 0.18) 18deg,
+    transparent 48deg,
+    transparent 360deg
+  );
+  animation: radarSweep 4s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes radarSweep {
+  to { transform: rotate(360deg); }
+}
+
+.radarAxis {
+  position: absolute;
+  background: rgba(93, 202, 165, 0.22);
+  pointer-events: none;
+}
+
+.radarAxisVertical {
+  top: 5%;
+  bottom: 5%;
+  left: 50%;
+  width: 1px;
+}
+
+.radarAxisHorizontal {
+  left: 5%;
+  right: 5%;
+  top: 50%;
+  height: 1px;
+}
+
+.radarHome {
+  position: absolute;
+  inset: calc(50% - 7px);
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(240, 169, 60, 0.8);
+  border-radius: 50%;
+  z-index: 4;
+}
+
+.radarHome span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.radarRange {
+  position: absolute;
+  z-index: 3;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(93, 202, 165, 0.72);
+}
+
+.radarRangeNorth { top: 12px; left: 50%; transform: translateX(-50%); }
+.radarRangeEast { right: 14px; top: 50%; transform: translateY(-50%); }
+.radarRangeSouth { bottom: 12px; left: 50%; transform: translateX(-50%); }
+.radarRangeWest { left: 14px; top: 50%; transform: translateY(-50%); }
+
+.radarPlane {
+  position: absolute;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 0;
+  color: rgba(177, 255, 224, 0.92);
+  background: transparent;
+  border: none;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+
+.radarPlaneIcon {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 14px solid var(--status-good);
+  filter: drop-shadow(0 0 6px rgba(93, 202, 165, 0.9));
+  transform-origin: 50% 55%;
+}
+
+.radarPlaneLabel {
+  max-width: 70px;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  text-overflow: ellipsis;
+  text-shadow: 0 0 8px #07100d;
+  white-space: nowrap;
+}
+
+.radarPlane:hover .radarPlaneLabel,
+.radarPlane.selected .radarPlaneLabel {
+  color: var(--text);
+}
+
+.radarPlane.selected .radarPlaneIcon {
+  border-bottom-color: var(--accent);
+  filter: drop-shadow(0 0 8px rgba(240, 169, 60, 0.95));
+}
+
+.radarDetails {
+  align-self: stretch;
+  min-width: 0;
+  border-left: 1px solid var(--border);
+  padding-left: 20px;
+}
+
+@media (max-width: 760px) {
+  .radarLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .radarScope {
+    width: min(100%, 320px);
+  }
+
+  .radarDetails {
+    border-left: none;
+    border-top: 1px solid var(--border);
+    padding: 16px 0 0;
+  }
+}
+
+.fireRow {
+  grid-template-columns: 1fr 72px 80px 90px;
+}
+
+.incidentRow {
+  grid-template-columns: 1fr 72px 70px 80px 120px;
+}
+
+.fireMapLegend {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding-top: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.fireMapLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fireMapKey {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.fireMapKey.incident {
+  background: var(--status-alert);
+}
+
+.fireMapKey.heat {
+  background: var(--accent);
+}
+
+.compactFireMapCard {
+  width: min(100%, 720px);
+  justify-self: center;
+}
+
+.fireMap {
+  position: relative;
+  width: min(100%, 300px);
+  aspect-ratio: 1;
+  height: auto;
+  margin-top: 18px;
+  margin-right: auto;
+  margin-left: auto;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: #d8ddd4;
+  box-shadow: inset 0 0 32px rgba(0, 0, 0, 0.18);
+}
+
+@media (max-width: 600px) {
+  .compactFireMapCard {
+    padding: 18px;
+  }
+
+  .compactFireMapCard .cardHeaderRow {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .fireMap {
+    width: min(100%, 260px);
+    margin-top: 14px;
+  }
+}
+
+/* ---------- iPhone-first layout ---------- */
+@media (max-width: 760px) {
+  body { overscroll-behavior-y: none; }
+  .dashboard { width: 100%; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) calc(92px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); gap: 14px; }
+  .heroCard { position: sticky; z-index: 1500; top: max(8px, env(safe-area-inset-top)); min-height: 106px; grid-template-columns: 92px minmax(0, 1fr); justify-items: stretch; gap: 10px; padding: 9px 13px; border-radius: 20px; text-align: left; backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); transition: min-height .22s ease, grid-template-columns .22s ease, padding .22s ease, border-radius .22s ease, box-shadow .22s ease; }
+  .logoPanel { grid-column: 1; order: initial; justify-self: stretch; }
+  .houseLogo { width: 88px; height: 84px; object-position: center; transition: width .22s ease, height .22s ease; }
+  .heroInfo { grid-column: 2; justify-self: end; text-align: right; min-width: 0; z-index: 1; }
+  .heroInfo h1 { font-size: clamp(29px, 9.5vw, 40px); white-space: nowrap; transition: font-size .22s ease; }
+  .locationBadge { margin-bottom: 6px; font-size: 8px; }
+  .date { margin: 4px 0 8px; font-size: 11px; }
+  .weatherPill { max-width: 100%; padding: 5px 9px; gap: 6px; font-size: 10px; white-space: nowrap; overflow: hidden; }
+  .weatherPill span { font-size: 13px; }
+  .weatherPill p { overflow: hidden; text-overflow: ellipsis; }
+  .heroCard.compact { min-height: 58px; grid-template-columns: 52px minmax(0, 1fr); padding: 5px 10px; border-radius: 16px; box-shadow: 0 14px 36px rgba(0,0,0,.42), inset 0 1px rgba(255,255,255,.04); }
+  .heroCard.compact .houseLogo { width: 48px; height: 48px; }
+  .heroCard.compact .heroInfo h1 { font-size: 27px; }
+  .heroCard.compact .locationBadge { margin-bottom: 2px; }
+  .heroCard.compact .date,
+  .heroCard.compact .weatherPill { display: none; }
+  .topNav { position: fixed; z-index: 2000; left: 8px; right: 8px; bottom: max(8px, env(safe-area-inset-bottom)); flex-wrap: nowrap; justify-content: flex-start; gap: 3px; padding: 6px; overflow-x: auto; border-radius: 18px; box-shadow: 0 18px 50px rgba(0,0,0,.55); scrollbar-width: none; }
+  .topNav::-webkit-scrollbar { display: none; }
+  .navButton { flex: 1 0 48px; min-height: 52px; padding: 6px 4px; flex-direction: column; justify-content: center; gap: 4px; font-size: 8px; border-radius: 12px; }
+  .navIcon { width: 18px; height: 18px; }
+  .secondaryNav { display: none; }
+  .moreNavButton { display: inline-flex; }
+  .moreMenu { position: fixed; display: grid; right: 10px; bottom: calc(76px + env(safe-area-inset-bottom)); width: 150px; padding: 6px; gap: 4px; background: rgba(8,24,26,.98); border: 1px solid var(--border); border-radius: 15px; box-shadow: 0 18px 50px rgba(0,0,0,.55); }
+  .moreMenu button { min-height: 46px; display: flex; align-items: center; gap: 10px; padding: 0 12px; color: var(--text); background: transparent; border: 0; border-radius: 10px; text-align: left; }
+  .moreMenu button:active { background: var(--panel-raised); }
+  .pageHeading { align-items: center; padding: 3px 2px; }
+  .pageHeading h2 { font-size: 25px; }
+  .pageEyebrow { font-size: 8px; }
+  .systemStatus { display: none; }
+  .signOutButton { min-width: 44px; min-height: 44px; padding: 0 10px; }
+  .notificationButton { width: 44px; height: 44px; }
+  .notificationPanel { position: fixed; top: auto; right: 12px; left: 12px; bottom: calc(82px + env(safe-area-inset-bottom)); width: auto; }
+  .grid, .pageGrid, .homeGrid { grid-template-columns: minmax(0, 1fr); gap: 11px; }
+  .homeWeather { order: -3; }
+  .homePriority:not(.homeWeather):not(.homeKeg) { order: -2; }
+  .homeKeg { order: -1; }
+  .card, .homeGrid .card { min-width: 0; min-height: 0; padding: 17px; border-radius: 17px; }
+  .card:hover { transform: none; }
+  .card h2, .homeGrid .card h2 { font-size: 19px; }
+  .statusRow { gap: 12px; }
+  .statusRow > span:first-child { min-width: 0; }
+  .statusRow strong { min-width: 0; text-align: right; overflow-wrap: anywhere; }
+  .primaryAction, .buttonGrid button { min-height: 46px; }
+  .flightList, .hourlyStrip, .lineScore { overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+  .flightRow { min-width: 580px; }
+  .dailyRow { min-width: 620px; }
+  .boxRow { min-width: 560px; }
+  .incidentRow { min-width: 600px; }
+  .fireRow { min-width: 430px; }
+  .quakeRow { grid-template-columns: 50px minmax(0, 1fr); padding: 8px 0; }
+  .quakeRow time { grid-column: 2; margin-top: -7px; }
+  .officialAlert { grid-template-columns: 1fr; gap: 5px; }
+  .officialAlert time { white-space: normal; }
+  .loginCard { padding: 22px 18px; border-radius: 22px; }
+  .loginLogo { width: 150px; height: 92px; margin-bottom: 14px; }
+  .loginIntro h1 { font-size: 30px; }
+}
+
+/* Essential Leaflet layout rules, kept local so the map still works if CDN CSS is slow/blocked. */
+.fireMap.leaflet-container {
+  overflow: hidden;
+  font-family: var(--font-body);
+}
+
+.fireMap .leaflet-pane,
+.fireMap .leaflet-tile,
+.fireMap .leaflet-marker-icon,
+.fireMap .leaflet-marker-shadow,
+.fireMap .leaflet-tile-container,
+.fireMap .leaflet-pane > svg,
+.fireMap .leaflet-pane > canvas,
+.fireMap .leaflet-zoom-box,
+.fireMap .leaflet-image-layer,
+.fireMap .leaflet-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.fireMap .leaflet-container {
+  overflow: hidden;
+}
+
+.fireMap .leaflet-tile,
+.fireMap .leaflet-marker-icon,
+.fireMap .leaflet-marker-shadow {
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.fireMap .leaflet-tile {
+  width: 256px;
+  height: 256px;
+}
+
+.fireMap .leaflet-pane {
+  z-index: 400;
+}
+
+.fireMap .leaflet-tile-pane {
+  z-index: 200;
+}
+
+.fireMap .leaflet-overlay-pane {
+  z-index: 400;
+}
+
+.fireMap .leaflet-shadow-pane {
+  z-index: 500;
+}
+
+.fireMap .leaflet-marker-pane {
+  z-index: 600;
+}
+
+.fireMap .leaflet-tooltip-pane {
+  z-index: 650;
+}
+
+.fireMap .leaflet-popup-pane {
+  z-index: 700;
+}
+
+.fireMap.leaflet-container,
+.fireMap .leaflet-pane,
+.fireMap .leaflet-tile-container,
+.fireMap .leaflet-layer {
+  border-radius: var(--radius-lg);
+}
+
+.fireMap .leaflet-tile {
+  filter: saturate(0.82) contrast(1.04) brightness(0.96);
+}
+
+.fireMap .leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.72);
+  color: #363a3d;
+  font-size: 10px;
+}
+
+.fireMapFallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #363a3d;
+  font-size: 13px;
+  text-align: center;
+}
+
+.fireMapTooltip {
+  max-width: 112px;
+  padding: 3px 5px;
+  border: 1px solid rgba(22, 24, 27, 0.16);
+  border-radius: 4px;
+  background: rgba(244, 242, 236, 0.92);
+  color: #202326;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  font-family: var(--font-body);
+  font-size: 8px;
+  line-height: 1.15;
+  white-space: normal;
+}
+
+.fireMapTooltip strong {
+  font-family: var(--font-display);
+  font-size: 9px;
+  line-height: 1.1;
+  color: #111416;
+}
+
+.fireMapTooltip.incident {
+  border-color: rgba(224, 88, 79, 0.38);
+}
+
+.fireMapTooltip.heat {
+  border-color: rgba(240, 169, 60, 0.45);
+}
+
+.fireMapTooltip .leaflet-popup-content-wrapper {
+  border: 1px solid rgba(22, 24, 27, 0.16);
+  border-radius: 6px;
+  background: rgba(244, 242, 236, 0.96);
+  color: #202326;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+.fireMapTooltip .leaflet-popup-content {
+  width: auto !important;
+  max-width: 130px;
+  margin: 6px 8px;
+  font-family: var(--font-body);
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+.fireMapTooltip .leaflet-popup-content strong {
+  font-family: var(--font-display);
+  font-size: 10px;
+  color: #111416;
+}
+
+.fireMapTooltip .leaflet-popup-tip {
+  background: rgba(244, 242, 236, 0.96);
+}
+
+@media (max-width: 600px) {
+  .fireMap {
+    width: min(100%, 260px);
+    height: auto;
+  }
+}
+
+.alertBlock {
+  border-top: 1px solid var(--border);
+  padding: 12px 0 4px;
+  margin-top: 8px;
+}
+
+.alertBlockHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.alertBlockTitle {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.alertBlockSeverity {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.alertBlockHeadline {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 6px 0 0;
+  line-height: 1.5;
+}
+
+.alertBlockMeta {
+  display: flex;
+  gap: 20px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+/* ---------- Padres scoreboard ---------- */
+
+.padresCard {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(214, 180, 95, 0.16), transparent 38%),
+    linear-gradient(180deg, rgba(47, 36, 22, 0.52), rgba(22, 24, 27, 0.92)),
+    var(--panel);
+}
+
+.padresCard::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(244, 242, 236, 0.035) 1px, transparent 1px),
+    linear-gradient(rgba(244, 242, 236, 0.025) 1px, transparent 1px);
+  background-size: 34px 34px;
+  pointer-events: none;
+}
+
+.padresCard > * {
+  position: relative;
+  z-index: 1;
+}
+
+.padresTitle {
+  font-size: clamp(22px, 3vw, 34px);
+}
+
+.scoreBoard {
+  display: grid;
+  grid-template-columns: 1fr minmax(110px, 150px) 1fr;
+  align-items: center;
+  gap: 16px;
+  padding: 22px 0 18px;
+}
+
+.scoreTeam {
+  min-height: 150px;
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  border: 1px solid rgba(244, 242, 236, 0.1);
+  border-radius: var(--radius-md);
+  padding: 18px;
+  background: rgba(14, 15, 17, 0.42);
+}
+
+.scoreTeam.leading {
+  border-color: rgba(214, 180, 95, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(214, 180, 95, 0.08);
+}
+
+.scoreTeamCity {
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.scoreTeamName {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(22px, 3vw, 34px);
+  letter-spacing: 0;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.scoreRun {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(72px, 10vw, 120px);
+  line-height: 1;
+  color: rgba(244, 242, 236, 0.45);
+  font-variant-numeric: tabular-nums;
+}
+
+.scoreRun.scoreWin {
+  color: var(--status-keg);
+  text-shadow: 0 0 24px rgba(214, 180, 95, 0.16);
+}
+
+.scoreDivider {
+  align-self: stretch;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-faint);
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.scoreDivider strong {
+  color: var(--text);
+  font-size: 17px;
+}
+
+.gameStatePill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  border: 1px solid rgba(214, 180, 95, 0.42);
+  border-radius: 999px;
+  padding: 6px 12px;
+  color: var(--status-keg);
+  background: rgba(214, 180, 95, 0.08);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.gameStatePill.live {
+  border-color: rgba(224, 88, 79, 0.62);
+  color: var(--status-alert);
+  background: rgba(224, 88, 79, 0.1);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.pregameBoard {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 0 18px;
+}
+
+.pregameBoard > div {
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(244, 242, 236, 0.1);
+  border-radius: var(--radius-md);
+  padding: 18px;
+  background: rgba(14, 15, 17, 0.42);
+}
+
+.pregameBoard strong {
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: clamp(42px, 7vw, 76px);
+  line-height: 1;
+}
+
+.lineScore {
+  margin: 14px 0 6px;
+  overflow-x: auto;
+  border: 1px solid rgba(244, 242, 236, 0.08);
+  border-radius: var(--radius-md);
+  background: rgba(14, 15, 17, 0.32);
+  padding: 8px 12px;
+}
+
+.lineScoreRow {
+  display: flex;
+  align-items: center;
+  border-top: 1px solid rgba(244, 242, 236, 0.08);
+  min-width: fit-content;
+}
+
+.lineScoreRow:first-child {
+  border-top: none;
+}
+
+.lineScoreHeader {
+  padding-bottom: 2px;
+}
+
+.lineScoreTeam {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  width: 46px;
+  flex-shrink: 0;
+  padding: 6px 0;
+}
+
+.lineScoreCell {
+  font-size: 13px;
+  color: var(--text-dim);
+  width: 32px;
+  text-align: center;
+  padding: 6px 0;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.lineScoreHeader .lineScoreCell {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.lineScoreHeader .lineScoreTeam {
+  color: var(--text-faint);
+}
+
+.lineScoreStat {
+  font-weight: 600;
+  color: var(--text);
+  border-left: 1px solid rgba(244, 242, 236, 0.12);
+  margin-left: 4px;
+}
+
+@media (max-width: 760px) {
+  .scoreBoard,
+  .pregameBoard {
+    grid-template-columns: 1fr;
+  }
+
+  .scoreDivider {
+    min-height: 82px;
+  }
+
+  .scoreTeam {
+    min-height: 120px;
+  }
+}
+
+.boxRow {
+  grid-template-columns: 1fr 36px 36px 36px 36px 36px 36px;
+}
+
+.boxNum {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Weather ---------- */
+
+.hourlyStrip {
+  display: flex;
+  overflow-x: auto;
+  margin-top: 12px;
+  padding-bottom: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.hourlyCell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 76px;
+  padding: 12px 8px;
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.hourlyCell:last-child {
+  border-right: none;
+}
+
+.hourlyTime {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.hourlyTemp {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.hourlyDesc {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
+  line-height: 1.3;
+}
+
+.hourlyPrecip {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--status-info);
+}
+
+.dailyRow {
+  grid-template-columns: 120px 100px 1fr 60px 100px;
+}
+
+.dailyTemp {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.dailyCondition {
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+@media (max-width: 600px) {
+  .heroCard {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .heroInfo {
+    text-align: right;
+    margin-left: 0;
+  }
+}

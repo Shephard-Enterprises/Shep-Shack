@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/shepshack.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#071416" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Shep Dashboard" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Shep Dashboard</title>
+    <script>
+      window.__shepClassicScriptRan = true
+      window.addEventListener('error', function (event) {
+        var root = document.getElementById('root')
+        if (!root) return
+        root.innerHTML =
+          '<div style="min-height:100vh;background:#0e0f11;color:#f4f2ec;font-family:system-ui,sans-serif;padding:24px;text-align:left">' +
+          '<h1 style="font-size:24px;margin:0 0 12px">Script error</h1>' +
+          '<pre style="white-space:pre-wrap;color:#e0584f;background:#16181b;border:1px solid #2a2d31;border-radius:6px;padding:16px">' +
+          String(event.message || 'Unknown script error') + '\n' +
+          String(event.filename || '') + ':' + String(event.lineno || '') + ':' + String(event.colno || '') +
+          '</pre></div>'
+      })
+      window.addEventListener('unhandledrejection', function (event) {
+        var root = document.getElementById('root')
+        if (!root) return
+        root.innerHTML =
+          '<div style="min-height:100vh;background:#0e0f11;color:#f4f2ec;font-family:system-ui,sans-serif;padding:24px;text-align:left">' +
+          '<h1 style="font-size:24px;margin:0 0 12px">Promise error</h1>' +
+          '<pre style="white-space:pre-wrap;color:#e0584f;background:#16181b;border:1px solid #2a2d31;border-radius:6px;padding:16px">' +
+          String(event.reason && (event.reason.stack || event.reason.message) || event.reason || 'Unknown promise error') +
+          '</pre></div>'
+      })
+    </script>
+    <script type="module">
+      window.__shepModuleScriptRan = true
+    </script>
+  </head>
+  <body>
+    <div id="root">
+      <div id="boot-status" style="min-height:100vh;background:#0e0f11;color:#f4f2ec;font-family:system-ui,sans-serif;padding:24px;text-align:left">
+        Loading Shep Dashboard…
+      </div>
+    </div>
+    <script>
+      ;(function () {
+        var el = document.getElementById('boot-status')
+        if (el && window.__shepClassicScriptRan) {
+          el.innerHTML = 'Classic JavaScript loaded. Waiting for app module…'
+        }
+      })()
+    </script>
+    <script type="module">
+      var el = document.getElementById('boot-status')
+      if (el && window.__shepModuleScriptRan) {
+        el.innerHTML = 'Module JavaScript loaded. Starting dashboard…'
+      }
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
