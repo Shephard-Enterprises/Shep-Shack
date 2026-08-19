@@ -432,7 +432,9 @@ function Freshness({ date, staleAfterMinutes = 10 }) {
 
 function usePadres() {
   const [game, setGame] = useState(null)
+  const [latestGame, setLatestGame] = useState(null)
   const [nextGame, setNextGame] = useState(null)
+  const [standing, setStanding] = useState(null)
   const [boxScore, setBoxScore] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -450,6 +452,7 @@ function usePadres() {
         const g = data.dates?.[0]?.games?.[0]
 
         if (g) {
+          setLatestGame(null)
           setNextGame(null)
           const padresAway = g.teams.away.team.id === 135
           const padresSide = padresAway ? g.teams.away : g.teams.home
@@ -509,14 +512,34 @@ function usePadres() {
         } else {
           setGame(null)
           setBoxScore(null)
+          const weekAgo = new Date()
+          weekAgo.setDate(weekAgo.getDate() - 7)
+          const yesterday = new Date()
+          yesterday.setDate(yesterday.getDate() - 1)
           const tomorrow = new Date()
           tomorrow.setDate(tomorrow.getDate() + 1)
           const nextWeek = new Date()
           nextWeek.setDate(nextWeek.getDate() + 7)
-          const nRes = await fetch(
-            `https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=135` +
-              `&startDate=${localDateStr(tomorrow)}&endDate=${localDateStr(nextWeek)}`
-          )
+          const [recentRes, nRes] = await Promise.all([
+            fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=135&hydrate=linescore&startDate=${localDateStr(weekAgo)}&endDate=${localDateStr(yesterday)}`),
+            fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=135&startDate=${localDateStr(tomorrow)}&endDate=${localDateStr(nextWeek)}`),
+          ])
+          if (recentRes.ok) {
+            const recentData = await recentRes.json()
+            const recentGames = (recentData.dates ?? []).flatMap(date => date.games ?? [])
+            const latest = recentGames.filter(item => item.status.abstractGameState === 'Final').at(-1)
+            if (latest) {
+              const padresAway = latest.teams.away.team.id === 135
+              const padresSide = padresAway ? latest.teams.away : latest.teams.home
+              const oppSide = padresAway ? latest.teams.home : latest.teams.away
+              setLatestGame({
+                gamePk: latest.gamePk, state: 'Final', detailedState: latest.status.detailedState,
+                padresScore: padresSide.score ?? 0, opponentScore: oppSide.score ?? 0,
+                opponent: oppSide.team.name, padresAway, padresHome: !padresAway,
+                venue: latest.venue?.name, gameDate: latest.gameDate,
+              })
+            }
+          }
           if (nRes.ok) {
             const nData = await nRes.json()
             const ng = nData.dates?.[0]?.games?.[0]
@@ -526,6 +549,35 @@ function usePadres() {
               const oppSide = padresAway ? ng.teams.home : ng.teams.away
               setNextGame({ gameDate: ng.gameDate, opponent: oppSide.team.name, padresHome: !padresAway, venue: ng.venue?.name, wins: padresSide.leagueRecord?.wins, losses: padresSide.leagueRecord?.losses })
             }
+          }
+        }
+        const season = new Date().getFullYear()
+        const standingsRes = await fetch(`https://statsapi.mlb.com/api/v1/standings?leagueId=104&season=${season}&standingsTypes=regularSeason`)
+        if (standingsRes.ok) {
+          const standingsData = await standingsRes.json()
+          const padresStanding = (standingsData.records ?? []).flatMap(record => record.teamRecords ?? []).find(team => team.team?.id === 135)
+          if (padresStanding) setStanding({
+            divisionRank: padresStanding.divisionRank,
+            leagueRank: padresStanding.leagueRank,
+            wildCardRank: padresStanding.wildCardRank,
+            gamesBack: padresStanding.gamesBack,
+            wins: padresStanding.wins,
+            losses: padresStanding.losses,
+          })
+        }
+        const futureStart = new Date()
+        futureStart.setDate(futureStart.getDate() + 1)
+        const futureEnd = new Date()
+        futureEnd.setDate(futureEnd.getDate() + 14)
+        const futureRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=135&startDate=${localDateStr(futureStart)}&endDate=${localDateStr(futureEnd)}`)
+        if (futureRes.ok) {
+          const futureData = await futureRes.json()
+          const upcoming = futureData.dates?.[0]?.games?.[0]
+          if (upcoming) {
+            const padresAway = upcoming.teams.away.team.id === 135
+            const padresSide = padresAway ? upcoming.teams.away : upcoming.teams.home
+            const oppSide = padresAway ? upcoming.teams.home : upcoming.teams.away
+            setNextGame({ gameDate: upcoming.gameDate, opponent: oppSide.team.name, padresHome: !padresAway, venue: upcoming.venue?.name, wins: padresSide.leagueRecord?.wins, losses: padresSide.leagueRecord?.losses })
           }
         }
         setError(null)
@@ -541,7 +593,7 @@ function usePadres() {
     return () => clearInterval(id)
   }, [])
 
-  return { game, nextGame, boxScore, loading, error, lastUpdated }
+  return { game, latestGame, nextGame, standing, boxScore, loading, error, lastUpdated }
 }
 
 const SOCCER_TEAMS = [
@@ -1678,11 +1730,12 @@ function SoccerScoreCard({ team }) {
 }
 
 function PadresScoreCard({ padresData }) {
-  const { game, nextGame, loading, error } = padresData
-  const event = game ?? nextGame
+  const { game, latestGame, nextGame, standing, loading, error } = padresData
+  const scoreGame = game?.state !== 'Preview' ? game : latestGame
+  const event = scoreGame ?? game ?? nextGame
+  const upcomingGame = game?.state === 'Preview' ? game : nextGame
   const isLive = game?.state === 'Live'
-  const hasScore = game && game.state !== 'Preview'
-  const record = game ?? nextGame
+  const hasScore = Boolean(scoreGame)
   const gameDate = event?.gameDate ? new Date(event.gameDate) : null
   return (
     <div className={`card accent-sport soccerCard ${isLive ? 'isLive' : ''}`}>
@@ -1696,17 +1749,20 @@ function PadresScoreCard({ padresData }) {
       {!loading && !error && !event && <p className="placeholderText">No game information available.</p>}
       {hasScore && (
         <div className="soccerScore">
-          <div><span>SD</span><strong>{game.padresScore}</strong></div>
-          <span className="soccerScoreStatus">{isLive ? game.detailedState : 'Final'}</span>
-          <div><span>{teamAbbr(game.opponent)}</span><strong>{game.opponentScore}</strong></div>
+          <div><span>SD</span><strong>{scoreGame.padresScore}</strong></div>
+          <span className="soccerScoreStatus">{isLive ? scoreGame.detailedState : 'Final'}</span>
+          <div><span>{teamAbbr(scoreGame.opponent)}</span><strong>{scoreGame.opponentScore}</strong></div>
         </div>
       )}
       {event && !hasScore && (
         <div className="soccerNext"><span>Next game</span><strong>{event.padresHome ? 'vs' : '@'} {event.opponent}</strong></div>
       )}
       {event && <div className="statusRow"><span>{hasScore ? 'Played' : 'First pitch'}</span><strong>{gameDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · {gameDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</strong></div>}
-      <div className="statusRow"><span>Record</span><strong>{record?.wins != null ? `${record.wins}–${record.losses}` : '—'}</strong></div>
-      {nextGame && hasScore && <div className="soccerUpcoming"><span>Up next</span><strong>{nextGame.padresHome ? 'vs' : '@'} {teamAbbr(nextGame.opponent)} · {new Date(nextGame.gameDate).toLocaleDateString([], { month: 'short', day: 'numeric' })}</strong></div>}
+      <div className="statusRow"><span>Record</span><strong>{standing ? `${standing.wins}–${standing.losses}` : '—'}</strong></div>
+      <div className="statusRow"><span>NL West</span><strong>{standing?.divisionRank ? `#${standing.divisionRank}${standing.gamesBack && standing.gamesBack !== '-' ? ` · ${standing.gamesBack} GB` : ''}` : '—'}</strong></div>
+      <div className="statusRow"><span>National League</span><strong>{standing?.leagueRank ? `#${standing.leagueRank}` : '—'}</strong></div>
+      {standing?.wildCardRank && <div className="statusRow"><span>Wild Card</span><strong>#{standing.wildCardRank}</strong></div>}
+      {upcomingGame && <div className="soccerUpcoming"><span>Next game</span><strong>{upcomingGame.padresHome ? 'vs' : '@'} {teamAbbr(upcomingGame.opponent)} · {new Date(upcomingGame.gameDate).toLocaleDateString([], { month: 'short', day: 'numeric' })} · {new Date(upcomingGame.gameDate).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</strong></div>}
     </div>
   )
 }
@@ -1723,15 +1779,11 @@ function SportsPage({ padresData, soccerData }) {
       {loading && SOCCER_TEAMS.map(team => <div className="card accent-sport soccerCard" key={team.key}><p className="cardLabel">{team.league}</p><h2>Loading {team.shortName}…</h2></div>)}
       {!loading && teams.map(team => <SoccerScoreCard team={team} key={team.key} />)}
       {error && <div className="card wideCard"><p className="placeholderText" style={{ color: 'var(--status-alert)' }}>Soccer scores are temporarily unavailable: {error}</p></div>}
-      <details className="sportsDetails wideCard">
-        <summary>Padres game details and box score</summary>
-        <PadresDetails padresData={padresData} />
-      </details>
     </section>
   )
 }
 
-function PadresDetails({ padresData }) {
+export function PadresDetails({ padresData }) {
   const { game, nextGame, boxScore, loading, error, lastUpdated } = padresData
   const isLive = game?.state === 'Live'
   const isFinal = game?.state === 'Final'
