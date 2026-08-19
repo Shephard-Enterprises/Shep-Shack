@@ -1605,21 +1605,6 @@ body {
   flex-shrink: 0;
 }
 
-.sportsMonogram {
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  border: 1px solid color-mix(in srgb, var(--status-sport) 55%, transparent);
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--status-sport) 16%, transparent);
-  color: var(--text);
-  font-family: var(--font-display);
-  font-size: 17px;
-  font-weight: 800;
-  flex-shrink: 0;
-}
-
 .soccerCard.isLive {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--status-alert) 45%, transparent);
 }
