@@ -1677,9 +1677,62 @@ function SoccerScoreCard({ team }) {
   )
 }
 
+function PadresScoreCard({ padresData }) {
+  const { game, nextGame, loading, error } = padresData
+  const event = game ?? nextGame
+  const isLive = game?.state === 'Live'
+  const hasScore = game && game.state !== 'Preview'
+  const record = game ?? nextGame
+  const gameDate = event?.gameDate ? new Date(event.gameDate) : null
+  return (
+    <div className={`card accent-sport soccerCard ${isLive ? 'isLive' : ''}`}>
+      <div className="soccerTeamHeader">
+        <div className="sportsMonogram" aria-hidden="true">SD</div>
+        <div><p className="cardLabel">MLB</p><h2>San Diego Padres</h2></div>
+        {isLive && <span className="gameStatePill live">Live</span>}
+      </div>
+      {loading && <p className="placeholderText">Loading Padres…</p>}
+      {error && <p className="placeholderText" style={{ color: 'var(--status-alert)' }}>Padres scores are temporarily unavailable.</p>}
+      {!loading && !error && !event && <p className="placeholderText">No game information available.</p>}
+      {hasScore && (
+        <div className="soccerScore">
+          <div><span>SD</span><strong>{game.padresScore}</strong></div>
+          <span className="soccerScoreStatus">{isLive ? game.detailedState : 'Final'}</span>
+          <div><span>{teamAbbr(game.opponent)}</span><strong>{game.opponentScore}</strong></div>
+        </div>
+      )}
+      {event && !hasScore && (
+        <div className="soccerNext"><span>Next game</span><strong>{event.padresHome ? 'vs' : '@'} {event.opponent}</strong></div>
+      )}
+      {event && <div className="statusRow"><span>{hasScore ? 'Played' : 'First pitch'}</span><strong>{gameDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · {gameDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</strong></div>}
+      <div className="statusRow"><span>Record</span><strong>{record?.wins != null ? `${record.wins}–${record.losses}` : '—'}</strong></div>
+      {nextGame && hasScore && <div className="soccerUpcoming"><span>Up next</span><strong>{nextGame.padresHome ? 'vs' : '@'} {teamAbbr(nextGame.opponent)} · {new Date(nextGame.gameDate).toLocaleDateString([], { month: 'short', day: 'numeric' })}</strong></div>}
+    </div>
+  )
+}
+
 function SportsPage({ padresData, soccerData }) {
+  const { teams, loading, error, lastUpdated } = soccerData
+  return (
+    <section className="pageGrid">
+      <div className="card wideCard sportsIntro">
+        <div><p className="cardLabel">San Diego teams</p><h2>Sports scoreboard</h2><p className="placeholderText">Padres, San Diego FC, and Wave scores in one place.</p></div>
+        <Freshness date={lastUpdated ?? padresData.lastUpdated} staleAfterMinutes={5} />
+      </div>
+      <PadresScoreCard padresData={padresData} />
+      {loading && SOCCER_TEAMS.map(team => <div className="card accent-sport soccerCard" key={team.key}><p className="cardLabel">{team.league}</p><h2>Loading {team.shortName}…</h2></div>)}
+      {!loading && teams.map(team => <SoccerScoreCard team={team} key={team.key} />)}
+      {error && <div className="card wideCard"><p className="placeholderText" style={{ color: 'var(--status-alert)' }}>Soccer scores are temporarily unavailable: {error}</p></div>}
+      <details className="sportsDetails wideCard">
+        <summary>Padres game details and box score</summary>
+        <PadresDetails padresData={padresData} />
+      </details>
+    </section>
+  )
+}
+
+function PadresDetails({ padresData }) {
   const { game, nextGame, boxScore, loading, error, lastUpdated } = padresData
-  const { teams: soccerTeams, loading: soccerLoading, error: soccerError, lastUpdated: soccerUpdated } = soccerData
   const isLive = game?.state === 'Live'
   const isFinal = game?.state === 'Final'
   const isPreview = game?.state === 'Preview'
@@ -1694,18 +1747,6 @@ function SportsPage({ padresData, soccerData }) {
 
   return (
     <section className="pageGrid">
-      <div className="card wideCard sportsIntro">
-        <div>
-          <p className="cardLabel">San Diego teams</p>
-          <h2>Sports scoreboard</h2>
-          <p className="placeholderText">Padres, San Diego FC, and Wave scores in one place.</p>
-        </div>
-        <Freshness date={soccerUpdated ?? lastUpdated} staleAfterMinutes={5} />
-      </div>
-      {soccerLoading && SOCCER_TEAMS.map(team => <div className="card accent-sport soccerCard" key={team.key}><p className="cardLabel">{team.league}</p><h2>Loading {team.shortName}…</h2></div>)}
-      {!soccerLoading && soccerTeams.map(team => <SoccerScoreCard team={team} key={team.key} />)}
-      {soccerError && <div className="card wideCard"><p className="placeholderText" style={{ color: 'var(--status-alert)' }}>Soccer scores are temporarily unavailable: {soccerError}</p></div>}
-
       {/* Main game / score card */}
       <div className="card wideCard accent-sport padresCard">
         <div className="cardHeaderRow">
