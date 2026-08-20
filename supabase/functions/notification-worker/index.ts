@@ -163,17 +163,24 @@ async function collectSoccer(team: { id: string; league: string; key: string; na
 }
 
 async function send(notice: Notice) {
-  const inserted = await rest('notification_events?on_conflict=event_key', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify({ event_key: notice.key, category: notice.category, title: notice.title, body: notice.body, url: notice.url }) })
-  if (!inserted?.length) return 0
+  await rest('notification_events?on_conflict=event_key', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ event_key: notice.key, category: notice.category, title: notice.title, body: notice.body, url: notice.url }) })
   const subscriptions = await rest(`push_subscriptions?select=id,endpoint,p256dh,auth,preferences&preferences->>${notice.category}=eq.true`)
   let sent = 0
   await Promise.all((subscriptions ?? []).map(async (subscription: any) => {
+    const claimed = await rest('notification_deliveries?on_conflict=event_key,subscription_id', {
+      method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
+      body: JSON.stringify({ event_key: notice.key, subscription_id: subscription.id }),
+    })
+    if (!claimed?.length) return
     try {
       await webpush.sendNotification({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } }, JSON.stringify({ title: notice.title, body: notice.body, tag: notice.key, url: notice.url }))
       sent++
     } catch (error: any) {
       if (error?.statusCode === 404 || error?.statusCode === 410) await rest(`push_subscriptions?id=eq.${subscription.id}`, { method: 'DELETE' })
-      else console.error('Push failed', error)
+      else {
+        await rest(`notification_deliveries?event_key=eq.${encodeURIComponent(notice.key)}&subscription_id=eq.${subscription.id}`, { method: 'DELETE' })
+        console.error('Push failed', error)
+      }
     }
   }))
   return sent

@@ -814,7 +814,7 @@ function Dashboard({ session }) {
         </div>
         <div className="headerActions">
           <div className="systemStatus"><span className="liveDot" />Live data</div>
-          <NotificationControl userId={session.user.id} onOpenSettings={() => setActivePage('house')} />
+          <NotificationControl key={activePage} userId={session.user.id} onOpenSettings={() => setActivePage('house')} />
         </div>
       </header>
 

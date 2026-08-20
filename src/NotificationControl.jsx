@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase'
 
 const VAPID_PUBLIC_KEY = 'BJ97HmDt2-WmESdjmCtOTHtX7EVTCpkU9pVHSB9rHPTNi8afjJoWRkU52lWR7btiVH4OvEHQUdCS463Fp-AYLLk'
@@ -18,6 +18,7 @@ export default function NotificationControl({ userId, mode = 'inbox', onOpenSett
   const [events, setEvents] = useState([])
   const [readKeys, setReadKeys] = useState(new Set())
   const [message, setMessage] = useState(null)
+  const controlRef = useRef(null)
   const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
 
   const loadInbox = useCallback(async () => {
@@ -35,14 +36,33 @@ export default function NotificationControl({ userId, mode = 'inbox', onOpenSett
     if (!supported) return
     navigator.serviceWorker.ready.then(async registration => {
       const subscription = await registration.pushManager.getSubscription()
-      setEnabled(Boolean(subscription) && Notification.permission === 'granted')
       if (subscription) {
-        const { data } = await supabase.from('push_subscriptions').select('preferences').eq('endpoint', subscription.endpoint).maybeSingle()
-        if (data?.preferences) setPreferences({ ...DEFAULT_PREFERENCES, ...data.preferences })
+        const { data: stored } = await supabase.from('push_subscriptions').select('preferences').eq('endpoint', subscription.endpoint).maybeSingle()
+        const value = subscription.toJSON()
+        const { data, error } = stored
+          ? { data: stored, error: null }
+          : await supabase.from('push_subscriptions').upsert({
+            user_id: userId, endpoint: value.endpoint, p256dh: value.keys.p256dh, auth: value.keys.auth,
+            preferences: DEFAULT_PREFERENCES, updated_at: new Date().toISOString(),
+          }, { onConflict: 'endpoint' }).select('preferences').single()
+        setEnabled(!error && Notification.permission === 'granted')
+        if (error) setMessage(`Push registration needs repair: ${error.message}`)
+        else if (data?.preferences) setPreferences({ ...DEFAULT_PREFERENCES, ...data.preferences })
+      } else {
+        setEnabled(false)
       }
     })
     return () => { if (inboxTimer) window.clearTimeout(inboxTimer) }
-  }, [loadInbox, mode, supported])
+  }, [loadInbox, mode, supported, userId])
+
+  useEffect(() => {
+    if (!open) return
+    const closeOutside = event => {
+      if (!controlRef.current?.contains(event.target)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOutside)
+    return () => document.removeEventListener('pointerdown', closeOutside)
+  }, [open])
 
   async function enableNotifications() {
     setMessage(null)
@@ -75,6 +95,13 @@ export default function NotificationControl({ userId, mode = 'inbox', onOpenSett
     if (subscription) await supabase.from('push_subscriptions').update({ preferences: next, updated_at: new Date().toISOString() }).eq('endpoint', subscription.endpoint)
   }
 
+  async function sendTestNotification() {
+    setMessage('Sending a test notification…')
+    const { data, error } = await supabase.functions.invoke('test-push')
+    if (error || data?.error) setMessage(`Test failed: ${data?.error ?? error.message}`)
+    else setMessage(`Test sent to ${data.sent} registered phone${data.sent === 1 ? '' : 's'}.`)
+  }
+
   async function markRead(eventKey) {
     if (readKeys.has(eventKey)) return
     setReadKeys(current => new Set(current).add(eventKey))
@@ -94,6 +121,7 @@ export default function NotificationControl({ userId, mode = 'inbox', onOpenSett
     <h3>{enabled ? 'Notifications on' : 'Stay in the loop'}</h3>
     {!enabled ? <button className="loginButton" type="button" onClick={enableNotifications}>Enable notifications</button> : <>
       {Object.entries(PREFERENCE_LABELS).map(([key, label]) => <label className="preferenceRow" key={key}><span>{label}</span><input type="checkbox" checked={preferences[key]} onChange={() => togglePreference(key)} /></label>)}
+      <button className="primaryAction" type="button" onClick={sendTestNotification}>Send test notification</button>
       <button className="textButton" type="button" onClick={disableNotifications}>Turn off on this device</button>
     </>}
     {message && <p className="notificationMessage">{message}</p>}
@@ -102,7 +130,7 @@ export default function NotificationControl({ userId, mode = 'inbox', onOpenSett
 
   if (mode === 'settings') return <div className="notificationSettings">{settings}</div>
 
-  return <div className="notificationControl">
+  return <div className="notificationControl" ref={controlRef}>
     <button className={`notificationButton ${enabled ? 'enabled' : ''}`} type="button" onClick={() => { setOpen(value => !value); loadInbox() }} aria-label={`${unreadCount} unread notifications`} aria-expanded={open}>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>
       {unreadCount > 0 && <span className="notificationCount">{unreadCount > 9 ? '9+' : unreadCount}</span>}
