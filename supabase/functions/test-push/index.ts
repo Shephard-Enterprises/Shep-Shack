@@ -33,7 +33,7 @@ Deno.serve(async request => {
   const subscriptions = await rest(`push_subscriptions?select=id,endpoint,p256dh,auth&user_id=eq.${userId}`)
   if (!subscriptions?.length) return Response.json({ sent: 0, error: 'This account has no registered phone. Turn notifications off, then enable them again.' }, { headers: corsHeaders })
 
-  webpush.setVapidDetails('mailto:shepshack@localhost', Deno.env.get('VAPID_PUBLIC_KEY')!, Deno.env.get('VAPID_PRIVATE_KEY')!)
+  webpush.setVapidDetails('mailto:notifications@shephard-enterprises.com', Deno.env.get('VAPID_PUBLIC_KEY')!, Deno.env.get('VAPID_PRIVATE_KEY')!)
   const results = await Promise.all(subscriptions.map(async (subscription: any) => {
     try {
       await webpush.sendNotification(

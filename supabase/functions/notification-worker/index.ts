@@ -188,7 +188,7 @@ async function send(notice: Notice) {
 
 Deno.serve(async request => {
   if (request.headers.get('x-worker-secret') !== WORKER_SECRET) return new Response('Unauthorized', { status: 401 })
-  webpush.setVapidDetails('mailto:shepshack@localhost', Deno.env.get('VAPID_PUBLIC_KEY')!, Deno.env.get('VAPID_PRIVATE_KEY')!)
+  webpush.setVapidDetails('mailto:notifications@shephard-enterprises.com', Deno.env.get('VAPID_PUBLIC_KEY')!, Deno.env.get('VAPID_PRIVATE_KEY')!)
   const groups = await Promise.allSettled([
     collectKeg(), collectFire(), collectEarthquakes(), collectOfficialAlerts(), collectOpenHouse(), collectPadres(),
     collectSoccer({ id: '22529', league: 'usa.1', key: 'sdfc', name: 'San Diego FC' }),

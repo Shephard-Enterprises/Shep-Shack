@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase'
 
-const VAPID_PUBLIC_KEY = 'BJ97HmDt2-WmESdjmCtOTHtX7EVTCpkU9pVHSB9rHPTNi8afjJoWRkU52lWR7btiVH4OvEHQUdCS463Fp-AYLLk'
+const VAPID_PUBLIC_KEY = 'BKcR72BKoxWn8AvRkCy7dQB8GEFpskO6F1kPUqDK_vLbUv4VqWx_FCon62Xhir5RvdYWxSOcTupqy0uXd2KMjNQ'
 const DEFAULT_PREFERENCES = { fire: true, earthquake: true, weather: true, emergency: true, keg: true, padres: true }
 const PREFERENCE_LABELS = { fire: 'Nearby fires', earthquake: 'Noticeable earthquakes', weather: 'Weather & open-house alerts', emergency: 'County emergency notices', keg: 'Keg level & sensor', padres: 'San Diego sports start & final' }
 
@@ -37,6 +37,17 @@ export default function NotificationControl({ userId, mode = 'inbox', onOpenSett
     navigator.serviceWorker.ready.then(async registration => {
       const subscription = await registration.pushManager.getSubscription()
       if (subscription) {
+        const currentKey = subscription.options?.applicationServerKey
+        const expectedKey = decodeKey(VAPID_PUBLIC_KEY)
+        const keyMatches = currentKey && currentKey.byteLength === expectedKey.byteLength &&
+          new Uint8Array(currentKey).every((byte, index) => byte === expectedKey[index])
+        if (!keyMatches) {
+          await supabase.from('push_subscriptions').delete().eq('endpoint', subscription.endpoint)
+          await subscription.unsubscribe()
+          setEnabled(false)
+          setMessage('Notification security was updated. Tap Enable notifications to reconnect this iPhone.')
+          return
+        }
         const { data: stored } = await supabase.from('push_subscriptions').select('preferences').eq('endpoint', subscription.endpoint).maybeSingle()
         const value = subscription.toJSON()
         const { data, error } = stored
