@@ -9,15 +9,14 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-function userIdFromRequest(request: Request) {
-  const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
-  if (!token) return null
-  try {
-    const encoded = token.split('.')[1].replaceAll('-', '+').replaceAll('_', '/')
-    return JSON.parse(atob(encoded)).sub as string
-  } catch {
-    return null
-  }
+async function authenticatedUserId(request: Request) {
+  const authorization = request.headers.get('authorization')
+  if (!authorization) return null
+  const response = await fetch(`${PROJECT_URL}/auth/v1/user`, {
+    headers: { apikey: SERVICE_KEY, Authorization: authorization },
+  })
+  if (!response.ok) return null
+  return (await response.json()).id as string
 }
 
 async function rest(path: string, init: RequestInit = {}) {
@@ -29,7 +28,7 @@ async function rest(path: string, init: RequestInit = {}) {
 
 Deno.serve(async request => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-  const userId = userIdFromRequest(request)
+  const userId = await authenticatedUserId(request)
   if (!userId) return Response.json({ sent: 0, error: 'The test request did not include a signed-in user.' }, { headers: corsHeaders })
   const subscriptions = await rest(`push_subscriptions?select=id,endpoint,p256dh,auth&user_id=eq.${userId}`)
   if (!subscriptions?.length) return Response.json({ sent: 0, error: 'This account has no registered phone. Turn notifications off, then enable them again.' }, { headers: corsHeaders })

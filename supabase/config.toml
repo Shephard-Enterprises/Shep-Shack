@@ -17,4 +17,4 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.test-push]
-verify_jwt = true
+verify_jwt = false
