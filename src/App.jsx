@@ -1753,8 +1753,28 @@ function WeatherRadar({ hourly }) {
   const [playing, setPlaying] = useState(true)
   const [radarError, setRadarError] = useState(null)
   const [mapReady, setMapReady] = useState(false)
+  const [inView, setInView] = useState(false)
+  const [documentVisible, setDocumentVisible] = useState(() => document.visibilityState !== 'hidden')
 
   useEffect(() => {
+    const element = mapRef.current
+    if (!element) return undefined
+    const observer = new IntersectionObserver(([entry]) => setInView(entry.isIntersecting), {
+      rootMargin: '240px 0px',
+      threshold: 0.01,
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const handleVisibility = () => setDocumentVisible(document.visibilityState !== 'hidden')
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [])
+
+  useEffect(() => {
+    if (!inView || !documentVisible) return undefined
     let cancelled = false
     async function loadFrames() {
       try {
@@ -1775,9 +1795,10 @@ function WeatherRadar({ hourly }) {
     loadFrames()
     const refreshId = setInterval(loadFrames, 5 * 60_000)
     return () => { cancelled = true; clearInterval(refreshId) }
-  }, [])
+  }, [inView, documentVisible])
 
   useEffect(() => {
+    if (!inView || !documentVisible) return undefined
     let cancelled = false
     loadLeaflet().then(L => {
       if (cancelled || !mapRef.current || mapInstance.current) return
@@ -1814,7 +1835,7 @@ function WeatherRadar({ hourly }) {
       if (!cancelled) setRadarError(error.message)
     })
     return () => { cancelled = true }
-  }, [])
+  }, [inView, documentVisible])
 
   useEffect(() => () => {
     mapInstance.current?.remove()
@@ -1823,10 +1844,10 @@ function WeatherRadar({ hourly }) {
   }, [])
 
   useEffect(() => {
-    if (!playing || frames.length < 2) return undefined
+    if (!playing || !inView || !documentVisible || frames.length < 2) return undefined
     const animationId = setInterval(() => setFrameIndex(index => (index + 1) % frames.length), 850)
     return () => clearInterval(animationId)
-  }, [playing, frames.length])
+  }, [playing, inView, documentVisible, frames.length])
 
   useEffect(() => {
     const map = mapInstance.current
@@ -1853,14 +1874,15 @@ function WeatherRadar({ hourly }) {
         {frameTime && <span className="cardMeta">{frameIndex === frames.length - 1 ? 'Latest · ' : ''}{frameTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>}
       </div>
       <div ref={mapRef} className="fireMap radarMap">
+        {!inView && !mapReady && <div className="radarIdleState">Radar loads when you scroll here</div>}
         {radarError && <div className="fireMapFallback radarFallback">Radar temporarily unavailable: {radarError}</div>}
       </div>
       <div className="radarControls">
-        <button type="button" className="radarPlayButton" onClick={() => setPlaying(value => !value)} disabled={frames.length < 2}>{playing ? 'Pause' : 'Play'} radar</button>
+        <button type="button" className="radarPlayButton" onClick={() => setPlaying(value => !value)} disabled={frames.length < 2}>{playing && inView && documentVisible ? 'Pause' : 'Play'} radar</button>
         <div className="radarTimeline" aria-label="Radar timeline">
           {frames.map((frame, index) => <button type="button" className={index === frameIndex ? 'active' : ''} aria-label={new Date(frame.time * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} onClick={() => { setPlaying(false); setFrameIndex(index) }} key={frame.time} />)}
         </div>
-        <span>{frames.length ? 'Past 2 hours' : 'Loading radar…'}</span>
+        <span>{frames.length ? inView && documentVisible ? 'Past 2 hours' : 'Paused offscreen' : inView ? 'Loading radar…' : 'Loads on view'}</span>
       </div>
       <div className="radarForecastStatus">
         <span className={`statusDot ${upcomingRain ? 'info' : 'good'}`} />

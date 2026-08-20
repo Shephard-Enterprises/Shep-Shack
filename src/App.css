@@ -1416,6 +1416,19 @@ body {
   background: rgba(7, 20, 22, .9);
 }
 
+.radarIdleState {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  color: var(--text-faint);
+  background: linear-gradient(145deg, rgba(104, 191, 196, .06), rgba(7, 20, 22, .92));
+  font-size: 12px;
+  text-align: center;
+}
+
 .radarControls {
   display: grid;
   grid-template-columns: auto minmax(100px, 1fr) auto;
