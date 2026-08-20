@@ -1,4 +1,4 @@
-const CACHE = 'shep-shack-v11'
+const CACHE = 'shep-shack-v12'
 const BASE = new URL(self.registration.scope).pathname.replace(/\/$/, '')
 const SHELL = [`${BASE}/`, `${BASE}/manifest.webmanifest`, `${BASE}/shepshack.png`, `${BASE}/padres.svg`, `${BASE}/favicon.svg`]
 
@@ -33,9 +33,12 @@ self.addEventListener('push', event => {
 
 self.addEventListener('notificationclick', event => {
   event.notification.close()
-  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+  event.waitUntil(Promise.all([
+    'clearAppBadge' in self.navigator ? self.navigator.clearAppBadge() : Promise.resolve(),
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
     const existing = clients[0]
     if (existing) { existing.navigate(event.notification.data?.url || `${BASE}/`); return existing.focus() }
     return self.clients.openWindow(event.notification.data?.url || `${BASE}/`)
-  }))
+    }),
+  ]))
 })

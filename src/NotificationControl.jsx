@@ -128,6 +128,7 @@ export default function NotificationControl({ userId, mode = 'inbox', onOpenSett
   async function markRead(eventKey) {
     if (readKeys.has(eventKey)) return
     setReadKeys(current => new Set(current).add(eventKey))
+    navigator.clearAppBadge?.()
     await supabase.from('notification_reads').upsert({ user_id: userId, event_key: eventKey })
   }
 
@@ -135,6 +136,7 @@ export default function NotificationControl({ userId, mode = 'inbox', onOpenSett
     const unread = events.filter(event => !readKeys.has(event.event_key))
     if (!unread.length) return
     setReadKeys(new Set(events.map(event => event.event_key)))
+    navigator.clearAppBadge?.()
     await supabase.from('notification_reads').upsert(unread.map(event => ({ user_id: userId, event_key: event.event_key })))
   }
 

@@ -747,8 +747,16 @@ function Dashboard({ session }) {
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 30_000)
-    navigator.clearAppBadge?.()
-    return () => clearInterval(timer)
+    const clearBadge = () => navigator.clearAppBadge?.()
+    const clearBadgeWhenVisible = () => { if (document.visibilityState === 'visible') clearBadge() }
+    clearBadge()
+    window.addEventListener('focus', clearBadge)
+    document.addEventListener('visibilitychange', clearBadgeWhenVisible)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('focus', clearBadge)
+      document.removeEventListener('visibilitychange', clearBadgeWhenVisible)
+    }
   }, [])
 
   useEffect(() => {
