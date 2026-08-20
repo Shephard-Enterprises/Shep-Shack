@@ -1,3 +1,5 @@
+import { isHouseholdMember } from '../_shared/household-auth.ts'
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-api-version',
@@ -8,6 +10,10 @@ const TEAMS = [
   { key: 'wave', name: 'San Diego Wave', shortName: 'Wave', league: 'NWSL', leagueSlug: 'usa.nwsl', teamId: '21423' },
   { key: 'sdfc', name: 'San Diego FC', shortName: 'SDFC', league: 'MLS', leagueSlug: 'usa.1', teamId: '22529' },
 ]
+
+const CACHE_TTL_MS = 60_000
+let cachedPayload: Record<string, unknown> | null = null
+let cachedAt = 0
 
 function compactDate(date: Date) {
   return date.toISOString().slice(0, 10).replaceAll('-', '')
@@ -55,8 +61,15 @@ async function loadTeam(config: typeof TEAMS[number]) {
 
 Deno.serve(async request => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (request.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405, headers: corsHeaders })
+  if (!(await isHouseholdMember(request))) return Response.json({ error: 'Household access required.' }, { status: 403, headers: corsHeaders })
+  if (cachedPayload && Date.now() - cachedAt < CACHE_TTL_MS) {
+    return Response.json(cachedPayload, { headers: { ...corsHeaders, 'Cache-Control': 'private, max-age=60' } })
+  }
   const results = await Promise.allSettled(TEAMS.map(loadTeam))
   const teams = results.flatMap(result => result.status === 'fulfilled' ? [result.value] : [])
   const errors = results.flatMap(result => result.status === 'rejected' ? [result.reason?.message ?? 'Score feed unavailable'] : [])
-  return Response.json({ teams, error: errors.length ? errors.join(' · ') : null, updatedAt: new Date().toISOString() }, { headers: corsHeaders })
+  cachedPayload = { teams, error: errors.length ? errors.join(' · ') : null, updatedAt: new Date().toISOString() }
+  cachedAt = Date.now()
+  return Response.json(cachedPayload, { headers: { ...corsHeaders, 'Cache-Control': 'private, max-age=60' } })
 })

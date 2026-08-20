@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
-
 :root {
   --bg: #071416;
   --panel: rgba(13, 31, 34, 0.82);
@@ -24,8 +22,8 @@
   --status-sport-dim: #2a3520;
   --status-keg: #d6b45f;
 
-  --font-display: 'Archivo', sans-serif;
-  --font-body: 'Inter', sans-serif;
+  --font-display: ui-rounded, 'SF Pro Rounded', 'Avenir Next', system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 
   --radius-sm: 6px;
   --radius-md: 10px;

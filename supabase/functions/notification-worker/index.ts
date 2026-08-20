@@ -62,7 +62,10 @@ async function collectKegChanges(): Promise<Notice[]> {
 }
 
 async function collectFire(): Promise<Notice[]> {
-  const response = await fetch(`${PROJECT_URL}/functions/v1/fire-watch`, { method: 'POST', headers: { 'x-worker-secret': WORKER_SECRET } })
+  const response = await fetch(`${PROJECT_URL}/functions/v1/fire-watch`, {
+    method: 'POST',
+    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'x-worker-secret': WORKER_SECRET },
+  })
   if (!response.ok) return []
   const data = await response.json()
   const notices: Notice[] = (data.incidents ?? []).map((fire: any) => ({ key: `fire:${fire.name}:${fire.discovered ?? 'current'}`, category: 'fire', title: `Wildfire ${Math.round(fire.distMi)} miles away`, body: `${fire.name} · ${Math.round(fire.acres).toLocaleString()} acres${fire.containment != null ? ` · ${fire.containment}% contained` : ''}`, url: '/?page=fire' }))
@@ -103,7 +106,7 @@ async function collectEarthquakes(): Promise<Notice[]> {
 
 async function collectOfficialAlerts(): Promise<Notice[]> {
   const response = await fetch(`${PROJECT_URL}/functions/v1/safety-feeds`, {
-    method: 'POST', headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+    method: 'POST', headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'x-worker-secret': WORKER_SECRET },
   })
   if (!response.ok) return []
   const data = await response.json()

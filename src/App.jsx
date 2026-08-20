@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 import './App.css'
 import { supabase } from './supabase'
 import { useFireWatch } from './useFireWatch'
+import { useFlights } from './useFlights'
 import { useKegStatus } from './useKegStatus'
+import { useNetworkStatus } from './useNetworkStatus'
+import { usePadres, useSoccerScores } from './useSportsData'
+import { useWeather } from './useWeather'
 import NotificationControl from './NotificationControl'
 
 // Public, approximate city-center coordinates. Precise household coordinates stay server-side.
@@ -102,8 +108,6 @@ const AIRCRAFT_NAMES = {
   'MQ9': 'General Atomics MQ-9 Reaper',
 }
 
-const routeCache = new Map()
-
 const TEAM_ABBR = {
   'Arizona Diamondbacks': 'ARI', 'Atlanta Braves': 'ATL', 'Baltimore Orioles': 'BAL',
   'Boston Red Sox': 'BOS', 'Chicago Cubs': 'CHC', 'Chicago White Sox': 'CWS',
@@ -123,167 +127,6 @@ function teamAbbr(name) {
 
 // --- Hooks ---
 
-async function fetchRoute(callsign) {
-  if (routeCache.has(callsign)) return routeCache.get(callsign)
-  try {
-    const res = await fetch(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(callsign)}`)
-    if (!res.ok) { routeCache.set(callsign, null); return null }
-    const data = await res.json()
-    const fr = data.response?.flightroute
-    const route = fr ? {
-      originCode: fr.origin?.iata_code ?? null,
-      originCity: fr.origin?.municipality ?? fr.origin?.name ?? null,
-      destCode: fr.destination?.iata_code ?? null,
-      destCity: fr.destination?.municipality ?? fr.destination?.name ?? null,
-      airline: fr.airline?.name ?? null,
-    } : null
-    routeCache.set(callsign, route)
-    return route
-  } catch {
-    routeCache.set(callsign, null)
-    return null
-  }
-}
-
-function useFlights() {
-  const [flights, setFlights] = useState([])
-  const [lastUpdated, setLastUpdated] = useState(null)
-  const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    async function load() {
-      if (document.visibilityState === 'hidden') return
-      try {
-        const { data, error: functionError } = await supabase.functions.invoke('flights')
-        if (functionError) throw new Error(functionError.message)
-        if (data?.error) throw new Error(data.error)
-        const airborne = (data.ac ?? [])
-          .filter(a => typeof a.alt_baro === 'number' && a.alt_baro > 0)
-          .sort((a, b) => (a.dst ?? 999) - (b.dst ?? 999))
-
-        const enriched = await Promise.all(airborne.map(async ac => {
-          const callsign = ac.flight?.trim()
-          const route = callsign ? await fetchRoute(callsign) : null
-          return { ...ac, route }
-        }))
-
-        setFlights(enriched)
-        setLastUpdated(new Date())
-        setError(null)
-      } catch (e) {
-        setError(e.message)
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-    const id = setInterval(load, 60_000)
-    return () => clearInterval(id)
-  }, [])
-
-  return { flights, lastUpdated, error, loading }
-}
-
-function useWeather() {
-  const [weather, setWeather] = useState(null)
-  const [hourly, setHourly] = useState([])
-  const [daily, setDaily] = useState([])
-  const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [lastUpdated, setLastUpdated] = useState(null)
-  const hourlyUrl = useRef(null)
-  const dailyUrl = useRef(null)
-
-  useEffect(() => {
-    async function load() {
-      if (document.visibilityState === 'hidden') return
-      try {
-        if (!hourlyUrl.current) {
-          const res = await fetch(
-            `https://api.weather.gov/points/${SANTEE.lat},${SANTEE.lon}`,
-            { headers: { 'User-Agent': 'ShepShackDashboard/1.0' } }
-          )
-          if (!res.ok) throw new Error(`NWS points HTTP ${res.status}`)
-          const data = await res.json()
-          hourlyUrl.current = data.properties.forecastHourly
-          dailyUrl.current = data.properties.forecast
-        }
-        const [hRes, dRes] = await Promise.all([
-          fetch(hourlyUrl.current, { cache: 'no-store', headers: { 'User-Agent': 'ShepShackDashboard/1.0' } }),
-          fetch(dailyUrl.current, { cache: 'no-store', headers: { 'User-Agent': 'ShepShackDashboard/1.0' } }),
-        ])
-        if (!hRes.ok) throw new Error(`NWS hourly HTTP ${hRes.status}`)
-        const hData = await hRes.json()
-        const periods = hData.properties.periods
-        const cur = periods[0]
-        let uvIndex = null
-        let uvIndexMax = null
-        try {
-          const uvParams = new URLSearchParams({
-            latitude: String(SANTEE.lat),
-            longitude: String(SANTEE.lon),
-            current: 'uv_index',
-            daily: 'uv_index_max',
-            timezone: TIME_ZONE,
-            forecast_days: '1',
-          })
-          const uvRes = await fetch(`https://api.open-meteo.com/v1/forecast?${uvParams.toString()}`, { cache: 'no-store' })
-          if (uvRes.ok) {
-            const uvData = await uvRes.json()
-            uvIndex = uvData.current?.uv_index ?? null
-            uvIndexMax = uvData.daily?.uv_index_max?.[0] ?? null
-          }
-        } catch {
-          // UV is supplemental; keep the primary NWS forecast when it is unavailable.
-        }
-        setWeather({
-          temp: cur.temperature,
-          description: cur.shortForecast,
-          windSpeed: cur.windSpeed,
-          windDirection: cur.windDirection,
-          humidity: cur.relativeHumidity?.value,
-          precipChance: cur.probabilityOfPrecipitation?.value,
-          uvIndex,
-          uvIndexMax,
-        })
-        setHourly(periods.slice(0, 12).map(p => ({
-          time: new Date(p.startTime).toLocaleTimeString([], { hour: 'numeric' }),
-          temp: p.temperature,
-          description: p.shortForecast,
-          precipChance: p.probabilityOfPrecipitation?.value ?? 0,
-          windSpeed: p.windSpeed,
-          windDir: p.windDirection,
-        })))
-        if (dRes.ok) {
-          const dData = await dRes.json()
-        setDaily(dData.properties.periods.slice(0, 14).map(p => ({
-            name: p.name,
-            temp: p.temperature,
-            tempUnit: p.temperatureUnit,
-            isDay: p.isDaytime,
-            description: p.shortForecast,
-            precipChance: p.probabilityOfPrecipitation?.value ?? 0,
-            windSpeed: p.windSpeed,
-            windDir: p.windDirection,
-          })))
-        }
-        setLastUpdated(new Date())
-        setError(null)
-      } catch (e) {
-        setError(e.message)
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-    const id = setInterval(load, 2 * 60_000)
-    return () => clearInterval(id)
-  }, [])
-
-  return { weather, hourly, daily, error, loading, lastUpdated }
-}
-
 function getAqiCategory(aqi) {
   if (aqi == null) return { label: 'Unavailable', tone: 'neutral' }
   if (aqi <= 50) return { label: 'Good', tone: 'good' }
@@ -294,7 +137,7 @@ function getAqiCategory(aqi) {
   return { label: 'Hazardous', tone: 'alert' }
 }
 
-function useSafetyData() {
+function useSafetyData({ enabled = true, intervalMs = 10 * 60_000, refreshKey = 0 } = {}) {
   const [airQuality, setAirQuality] = useState(null)
   const [earthquakes, setEarthquakes] = useState([])
   const [weatherAlerts, setWeatherAlerts] = useState([])
@@ -305,8 +148,10 @@ function useSafetyData() {
 
   useEffect(() => {
     let cancelled = false
+    let inFlight = false
     async function load() {
-      if (document.visibilityState === 'hidden') return
+      if (!enabled || inFlight || document.visibilityState === 'hidden') return
+      inFlight = true
       try {
         const startTime = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
         const airUrl = new URL('https://air-quality-api.open-meteo.com/v1/air-quality')
@@ -352,59 +197,22 @@ function useSafetyData() {
       } catch (e) {
         if (!cancelled) setError(e.message)
       } finally {
+        inFlight = false
         if (!cancelled) setLoading(false)
       }
     }
     load()
-    const id = setInterval(load, 10 * 60_000)
-    return () => { cancelled = true; clearInterval(id) }
-  }, [])
+    const id = setInterval(load, intervalMs)
+    const onVisible = () => { if (document.visibilityState === 'visible') load() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { cancelled = true; clearInterval(id); document.removeEventListener('visibilitychange', onVisible) }
+  }, [enabled, intervalMs, refreshKey])
 
   return { airQuality, earthquakes, weatherAlerts, countyEmergencies, loading, error, lastUpdated }
 }
 
-function useNetworkStatus() {
-  const getConnection = () => {
-    const connection = navigator.connection ?? navigator.mozConnection ?? navigator.webkitConnection
-    return {
-      online: navigator.onLine,
-      effectiveType: connection?.effectiveType ?? null,
-      downlink: connection?.downlink ?? null,
-      rtt: connection?.rtt ?? null,
-    }
-  }
-
-  const [network, setNetwork] = useState(getConnection)
-
-  useEffect(() => {
-    const update = () => setNetwork(getConnection())
-    const connection = navigator.connection ?? navigator.mozConnection ?? navigator.webkitConnection
-
-    window.addEventListener('online', update)
-    window.addEventListener('offline', update)
-    connection?.addEventListener?.('change', update)
-
-    return () => {
-      window.removeEventListener('online', update)
-      window.removeEventListener('offline', update)
-      connection?.removeEventListener?.('change', update)
-    }
-  }, [])
-
-  return network
-}
-
-
 const FIRE_INCIDENT_RADIUS_MI = 30
 const FIRE_INCIDENT_MIN_ACRES = 5
-const LEAFLET_CSS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
-const LEAFLET_JS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
-let leafletLoadPromise = null
-
-
-function localDateStr(d = new Date()) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
 function formatUvIndex(value) {
   if (value == null) return '—'
@@ -430,149 +238,10 @@ function Freshness({ date, staleAfterMinutes = 10 }) {
   return <span className={`freshness ${stale ? 'stale' : ''}`}><span className={`statusDot ${stale ? 'alert' : 'good'}`} />{minutes < 1 ? 'Just updated' : `${minutes}m ago`}</span>
 }
 
-function usePadres() {
-  const [game, setGame] = useState(null)
-  const [latestGame, setLatestGame] = useState(null)
-  const [nextGame, setNextGame] = useState(null)
-  const [standing, setStanding] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [lastUpdated, setLastUpdated] = useState(null)
-
-  useEffect(() => {
-    async function load() {
-      if (document.visibilityState === 'hidden') return
-      try {
-        const res = await fetch(
-          `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${localDateStr()}&teamId=135`
-        )
-        if (!res.ok) throw new Error(`MLB HTTP ${res.status}`)
-        const data = await res.json()
-        const g = data.dates?.[0]?.games?.[0]
-
-        if (g) {
-          setNextGame(null)
-          const padresAway = g.teams.away.team.id === 135
-          const padresSide = padresAway ? g.teams.away : g.teams.home
-          const oppSide = padresAway ? g.teams.home : g.teams.away
-          setGame({
-            gamePk: g.gamePk,
-            state: g.status.abstractGameState,
-            detailedState: g.status.detailedState,
-            padresScore: padresSide.score ?? 0,
-            opponentScore: oppSide.score ?? 0,
-            opponent: oppSide.team.name,
-            padresAway,
-            padresHome: !padresAway,
-            venue: g.venue?.name,
-            gameDate: g.gameDate,
-            wins: padresSide.leagueRecord?.wins,
-            losses: padresSide.leagueRecord?.losses,
-          })
-        } else {
-          setGame(null)
-        }
-        const weekAgo = new Date()
-        weekAgo.setDate(weekAgo.getDate() - 7)
-        const yesterday = new Date()
-        yesterday.setDate(yesterday.getDate() - 1)
-        const recentRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=135&startDate=${localDateStr(weekAgo)}&endDate=${localDateStr(yesterday)}`)
-        if (recentRes.ok) {
-          const recentData = await recentRes.json()
-          const recentGames = (recentData.dates ?? []).flatMap(date => date.games ?? [])
-          const latest = recentGames.filter(item => item.status.abstractGameState === 'Final').at(-1)
-          if (latest) {
-            const padresAway = latest.teams.away.team.id === 135
-            const padresSide = padresAway ? latest.teams.away : latest.teams.home
-            const oppSide = padresAway ? latest.teams.home : latest.teams.away
-            setLatestGame({
-              gamePk: latest.gamePk, state: 'Final', detailedState: latest.status.detailedState,
-              padresScore: padresSide.score ?? 0, opponentScore: oppSide.score ?? 0,
-              opponent: oppSide.team.name, padresAway, padresHome: !padresAway,
-              venue: latest.venue?.name, gameDate: latest.gameDate,
-            })
-          } else {
-            setLatestGame(null)
-          }
-        }
-        const season = new Date().getFullYear()
-        const standingsRes = await fetch(`https://statsapi.mlb.com/api/v1/standings?leagueId=104&season=${season}&standingsTypes=regularSeason`)
-        if (standingsRes.ok) {
-          const standingsData = await standingsRes.json()
-          const padresStanding = (standingsData.records ?? []).flatMap(record => record.teamRecords ?? []).find(team => team.team?.id === 135)
-          if (padresStanding) setStanding({
-            divisionRank: padresStanding.divisionRank,
-            leagueRank: padresStanding.leagueRank,
-            wildCardRank: padresStanding.wildCardRank,
-            gamesBack: padresStanding.gamesBack,
-            wins: padresStanding.wins,
-            losses: padresStanding.losses,
-          })
-        }
-        const futureStart = new Date()
-        futureStart.setDate(futureStart.getDate() + 1)
-        const futureEnd = new Date()
-        futureEnd.setDate(futureEnd.getDate() + 14)
-        const futureRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=135&startDate=${localDateStr(futureStart)}&endDate=${localDateStr(futureEnd)}`)
-        if (futureRes.ok) {
-          const futureData = await futureRes.json()
-          const upcoming = futureData.dates?.[0]?.games?.[0]
-          if (upcoming) {
-            const padresAway = upcoming.teams.away.team.id === 135
-            const padresSide = padresAway ? upcoming.teams.away : upcoming.teams.home
-            const oppSide = padresAway ? upcoming.teams.home : upcoming.teams.away
-            setNextGame({ gameDate: upcoming.gameDate, opponent: oppSide.team.name, padresHome: !padresAway, venue: upcoming.venue?.name, wins: padresSide.leagueRecord?.wins, losses: padresSide.leagueRecord?.losses })
-          }
-        }
-        setError(null)
-        setLastUpdated(new Date())
-      } catch (e) {
-        setError(e.message)
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-    const id = setInterval(load, 30_000)
-    return () => clearInterval(id)
-  }, [])
-
-  return { game, latestGame, nextGame, standing, loading, error, lastUpdated }
-}
-
 const SOCCER_TEAMS = [
   { key: 'wave', name: 'San Diego Wave', shortName: 'Wave', league: 'NWSL', leagueSlug: 'usa.nwsl', teamId: '21423' },
   { key: 'sdfc', name: 'San Diego FC', shortName: 'SDFC', league: 'MLS', leagueSlug: 'usa.1', teamId: '22529' },
 ]
-
-function useSoccerScores() {
-  const [teams, setTeams] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [lastUpdated, setLastUpdated] = useState(null)
-
-  useEffect(() => {
-    async function load() {
-      if (document.visibilityState === 'hidden') return
-      try {
-        const { data, error: functionError } = await supabase.functions.invoke('sports')
-        if (functionError) throw new Error(functionError.message)
-        setTeams(data?.teams ?? [])
-        setError(data?.error ?? null)
-        setLastUpdated(data?.updatedAt ? new Date(data.updatedAt) : new Date())
-      } catch (loadError) {
-        setError(loadError.message)
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-    const id = setInterval(load, 60_000)
-    return () => clearInterval(id)
-  }, [])
-
-  return { teams, loading, error, lastUpdated }
-}
 
 // --- App shell ---
 
@@ -716,6 +385,7 @@ function Dashboard({ session }) {
   const [headerCompact, setHeaderCompact] = useState(false)
   const [pullDistance, setPullDistance] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
   const pullStart = useRef(null)
   const pullDistanceRef = useRef(0)
   const [activePage, setActivePage] = useState(() => {
@@ -725,13 +395,14 @@ function Dashboard({ session }) {
   })
   const [moreOpen, setMoreOpen] = useState(false)
   const network = useNetworkStatus()
-  const flightData = useFlights()
-  const weatherData = useWeather()
-  const fireData = useFireWatch()
-  const safetyData = useSafetyData()
-  const padresData = usePadres()
-  const soccerData = useSoccerScores()
-  const kegData = useKegStatus()
+  const onHome = activePage === 'home'
+  const flightData = useFlights({ enabled: onHome || activePage === 'flights', intervalMs: onHome ? 5 * 60_000 : 60_000, refreshKey })
+  const weatherData = useWeather({ enabled: onHome || activePage === 'weather', intervalMs: onHome ? 5 * 60_000 : 2 * 60_000, refreshKey })
+  const fireData = useFireWatch({ enabled: onHome || activePage === 'fire', intervalMs: onHome ? 10 * 60_000 : 5 * 60_000, refreshKey })
+  const safetyData = useSafetyData({ enabled: onHome || activePage === 'fire', intervalMs: 10 * 60_000, refreshKey })
+  const padresData = usePadres({ enabled: onHome || activePage === 'sports', intervalMs: onHome ? 10 * 60_000 : 60_000, refreshKey })
+  const soccerData = useSoccerScores({ enabled: onHome || activePage === 'sports', intervalMs: onHome ? 10 * 60_000 : 60_000, refreshKey })
+  const kegData = useKegStatus({ enabled: onHome || activePage === 'keg', includeHistory: activePage === 'keg', intervalMs: onHome ? 60_000 : 30_000, refreshKey })
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 30_000)
@@ -770,7 +441,12 @@ function Dashboard({ session }) {
       if (pullDistanceRef.current >= 68) {
         setRefreshing(true)
         setPullDistance(68)
-        window.setTimeout(() => window.location.reload(), 300)
+        setRefreshKey(key => key + 1)
+        window.setTimeout(() => {
+          pullDistanceRef.current = 0
+          setPullDistance(0)
+          setRefreshing(false)
+        }, 700)
       } else {
         pullDistanceRef.current = 0
         setPullDistance(0)
@@ -848,7 +524,7 @@ function Dashboard({ session }) {
         </div>
         <div className="headerActions">
           <div className="systemStatus"><span className="liveDot" />Live data</div>
-          <NotificationControl key={activePage} userId={session.user.id} onOpenSettings={() => setActivePage('house')} />
+          <NotificationControl userId={session.user.id} onOpenSettings={() => setActivePage('house')} />
         </div>
       </header>
 
@@ -1227,26 +903,7 @@ function escapeHtml(value) {
 }
 
 function loadLeaflet() {
-  if (window.L) return Promise.resolve(window.L)
-  if (leafletLoadPromise) return leafletLoadPromise
-
-  leafletLoadPromise = new Promise((resolve, reject) => {
-    if (!document.querySelector(`link[href="${LEAFLET_CSS_URL}"]`)) {
-      const link = document.createElement('link')
-      link.rel = 'stylesheet'
-      link.href = LEAFLET_CSS_URL
-      document.head.appendChild(link)
-    }
-
-    const script = document.createElement('script')
-    script.src = LEAFLET_JS_URL
-    script.async = true
-    script.onload = () => resolve(window.L)
-    script.onerror = () => reject(new Error('Leaflet failed to load'))
-    document.head.appendChild(script)
-  })
-
-  return leafletLoadPromise
+  return Promise.resolve(L)
 }
 
 function FireMap({ incidents, fires, loading }) {
@@ -1852,9 +1509,9 @@ function WeatherRadar({ hourly }) {
   useEffect(() => {
     const map = mapInstance.current
     const frame = frames[frameIndex]
-    if (!map || !frame || !window.L) return
+    if (!map || !frame) return
     if (radarLayer.current) radarLayer.current.remove()
-    radarLayer.current = window.L.tileLayer(`${frame.host}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`, {
+    radarLayer.current = L.tileLayer(`${frame.host}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`, {
       tileSize: 256,
       opacity: 0.72,
       maxNativeZoom: 7,

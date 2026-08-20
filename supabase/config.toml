@@ -14,7 +14,7 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.sports]
-verify_jwt = false
+verify_jwt = true
 
 [functions.test-push]
 verify_jwt = false

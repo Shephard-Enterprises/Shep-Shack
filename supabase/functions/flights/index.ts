@@ -1,3 +1,5 @@
+import { isHouseholdMember } from '../_shared/household-auth.ts'
+
 const HOME = { lat: Number(Deno.env.get('HOME_LAT')), lon: Number(Deno.env.get('HOME_LON')) }
 const RADIUS_NM = 4.3
 
@@ -61,15 +63,7 @@ Deno.serve(async request => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
 
-  const authorization = request.headers.get('Authorization')
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
-  if (!authorization || !supabaseUrl || !anonKey) return json({ error: 'Authentication required.' }, 401)
-
-  const authResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
-    headers: { Authorization: authorization, apikey: anonKey },
-  })
-  if (!authResponse.ok) return json({ error: 'Authentication required.' }, 401)
+  if (!(await isHouseholdMember(request))) return json({ error: 'Household access required.' }, 403)
 
   const failures: string[] = []
   for (const provider of [fetchAdsbLol, fetchOpenSky]) {

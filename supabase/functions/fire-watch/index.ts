@@ -1,3 +1,5 @@
+import { isHouseholdMember } from '../_shared/household-auth.ts'
+
 const HOME = { lat: Number(Deno.env.get('HOME_LAT')), lon: Number(Deno.env.get('HOME_LON')) }
 const RADIUS_MI = 30
 const MIN_ACRES = 5
@@ -12,11 +14,7 @@ function json(body: unknown, status = 200) {
 async function isAuthenticated(request: Request) {
   const workerSecret = Deno.env.get('NOTIFICATION_WORKER_SECRET')
   if (workerSecret && request.headers.get('x-worker-secret') === workerSecret) return true
-  const authorization = request.headers.get('Authorization')
-  const url = Deno.env.get('SUPABASE_URL')
-  const key = Deno.env.get('SUPABASE_ANON_KEY')
-  if (!authorization || !url || !key) return false
-  return (await fetch(`${url}/auth/v1/user`, { headers: { Authorization: authorization, apikey: key } })).ok
+  return isHouseholdMember(request)
 }
 
 function distanceMi(lat1: number, lon1: number, lat2: number, lon2: number) {

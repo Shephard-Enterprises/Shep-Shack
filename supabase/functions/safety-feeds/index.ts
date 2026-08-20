@@ -1,3 +1,5 @@
+import { isHouseholdMember } from '../_shared/household-auth.ts'
+
 const HOME = { lat: Number(Deno.env.get('HOME_LAT')), lon: Number(Deno.env.get('HOME_LON')) }
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -38,6 +40,10 @@ async function countyEmergencies() {
 
 Deno.serve(async request => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (request.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405, headers: corsHeaders })
+  const workerSecret = Deno.env.get('NOTIFICATION_WORKER_SECRET')
+  const fromWorker = Boolean(workerSecret && request.headers.get('x-worker-secret') === workerSecret)
+  if (!fromWorker && !(await isHouseholdMember(request))) return Response.json({ error: 'Household access required.' }, { status: 403, headers: corsHeaders })
   const results = await Promise.allSettled([weatherAlerts(), countyEmergencies()])
   const errors = results.flatMap(result => result.status === 'rejected' ? [result.reason?.message ?? 'Feed unavailable'] : [])
   return Response.json({

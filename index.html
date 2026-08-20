@@ -2,6 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.adsbdb.com https://api.weather.gov https://api.open-meteo.com https://air-quality-api.open-meteo.com https://earthquake.usgs.gov https://statsapi.mlb.com https://api.rainviewer.com https://speed.cloudflare.com; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.rainviewer.com https://*.espncdn.com; font-src 'self'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/shepshack.png" />
@@ -13,33 +15,6 @@
     <meta name="apple-mobile-web-app-title" content="Shep Dashboard" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Shep Dashboard</title>
-    <script>
-      window.__shepClassicScriptRan = true
-      window.addEventListener('error', function (event) {
-        var root = document.getElementById('root')
-        if (!root) return
-        root.innerHTML =
-          '<div style="min-height:100vh;background:#0e0f11;color:#f4f2ec;font-family:system-ui,sans-serif;padding:24px;text-align:left">' +
-          '<h1 style="font-size:24px;margin:0 0 12px">Script error</h1>' +
-          '<pre style="white-space:pre-wrap;color:#e0584f;background:#16181b;border:1px solid #2a2d31;border-radius:6px;padding:16px">' +
-          String(event.message || 'Unknown script error') + '\n' +
-          String(event.filename || '') + ':' + String(event.lineno || '') + ':' + String(event.colno || '') +
-          '</pre></div>'
-      })
-      window.addEventListener('unhandledrejection', function (event) {
-        var root = document.getElementById('root')
-        if (!root) return
-        root.innerHTML =
-          '<div style="min-height:100vh;background:#0e0f11;color:#f4f2ec;font-family:system-ui,sans-serif;padding:24px;text-align:left">' +
-          '<h1 style="font-size:24px;margin:0 0 12px">Promise error</h1>' +
-          '<pre style="white-space:pre-wrap;color:#e0584f;background:#16181b;border:1px solid #2a2d31;border-radius:6px;padding:16px">' +
-          String(event.reason && (event.reason.stack || event.reason.message) || event.reason || 'Unknown promise error') +
-          '</pre></div>'
-      })
-    </script>
-    <script type="module">
-      window.__shepModuleScriptRan = true
-    </script>
   </head>
   <body>
     <div id="root">
@@ -47,20 +22,6 @@
         Loading Shep Dashboard…
       </div>
     </div>
-    <script>
-      ;(function () {
-        var el = document.getElementById('boot-status')
-        if (el && window.__shepClassicScriptRan) {
-          el.innerHTML = 'Classic JavaScript loaded. Waiting for app module…'
-        }
-      })()
-    </script>
-    <script type="module">
-      var el = document.getElementById('boot-status')
-      if (el && window.__shepModuleScriptRan) {
-        el.innerHTML = 'Module JavaScript loaded. Starting dashboard…'
-      }
-    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

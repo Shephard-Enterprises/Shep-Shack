@@ -1,4 +1,4 @@
-const CACHE = 'shep-shack-v21'
+const CACHE = 'shep-shack-v22'
 const BASE = new URL(self.registration.scope).pathname.replace(/\/$/, '')
 const SHELL = [`${BASE}/`, `${BASE}/manifest.webmanifest`, `${BASE}/shepshack.png`, `${BASE}/padres.svg`, `${BASE}/favicon.svg`]
 
@@ -15,12 +15,36 @@ self.addEventListener('activate', event => {
 })
 
 self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET' || new URL(event.request.url).origin !== self.location.origin) return
-  event.respondWith(fetch(event.request).then(response => {
-    const copy = response.clone()
-    caches.open(CACHE).then(cache => cache.put(event.request, copy))
+  if (event.request.method !== 'GET') return
+  const url = new URL(event.request.url)
+  if (url.origin !== self.location.origin) return
+
+  if (event.request.mode === 'navigate') {
+    event.respondWith((async () => {
+      try {
+        const response = await fetch(event.request)
+        if (response.ok && response.type === 'basic') {
+          await caches.open(CACHE).then(cache => cache.put(`${BASE}/`, response.clone()))
+        }
+        return response
+      } catch {
+        return (await caches.match(`${BASE}/`)) || Response.error()
+      }
+    })())
+    return
+  }
+
+  const cacheable = ['script', 'style', 'image', 'font', 'manifest'].includes(event.request.destination)
+  if (!cacheable) return
+  event.respondWith((async () => {
+    const cached = await caches.match(event.request)
+    if (cached) return cached
+    const response = await fetch(event.request)
+    if (response.ok && response.type === 'basic') {
+      await caches.open(CACHE).then(cache => cache.put(event.request, response.clone()))
+    }
     return response
-  }).catch(() => caches.match(event.request).then(cached => cached || caches.match(`${BASE}/`))))
+  })())
 })
 
 self.addEventListener('push', event => {

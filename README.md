@@ -1,16 +1,57 @@
-# React + Vite
+# Shep Shack Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Private, iPhone-first household dashboard built with React, Vite, Supabase, and an ESP32 keg scale.
 
-Currently, two official plugins are available:
+## Local development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Create `.env` in the project root with the public browser configuration:
 
-## React Compiler
+```env
+VITE_SUPABASE_URL=your-project-url
+VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
+VITE_VAPID_PUBLIC_KEY=your-public-vapid-key
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Then run:
 
-## Expanding the ESLint configuration
+```sh
+npm install
+npm run dev
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Before releasing a change:
+
+```sh
+npm run lint
+npm run build
+npm audit
+```
+
+## Household access
+
+Database access and household Edge Functions require an entry in `public.household_members`. The allowlist migration automatically adds every Auth user that exists when it is first applied.
+
+After creating another user in Supabase Auth, add that account with the SQL editor:
+
+```sql
+insert into public.household_members (user_id)
+select id from auth.users where email = 'person@example.com'
+on conflict (user_id) do nothing;
+```
+
+Removing that row immediately removes the account's dashboard data access without deleting its Auth account.
+
+## Supabase deployment
+
+The repository contains migrations and Edge Functions under `supabase/`. Apply migrations before deploying functions that depend on them:
+
+```sh
+npx supabase db push
+npx supabase functions deploy
+```
+
+Private Edge Function secrets belong in Supabase project secrets. ESP32 Wi-Fi and ingestion credentials belong in `secrets.h`; neither should be committed.
+
+## Data retention
+
+Raw keg readings and notification events are retained for 90 days. Pour and keg-change records remain available for long-term dashboard analytics.
