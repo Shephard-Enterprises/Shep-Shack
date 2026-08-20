@@ -1870,15 +1870,18 @@ function groupDailyForecast(periods) {
   return days.slice(0, 7)
 }
 
-function KegHistory({ history, pours, currentBeerOz }) {
+function KegHistory({ history, pours, currentBeerOz, latestKegChange }) {
   const now = new Date()
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const todaysPours = pours.filter(pour => pour.pouredAt >= startOfToday)
+  const activePours = latestKegChange ? pours.filter(pour => pour.pouredAt >= latestKegChange.changedAt) : pours
+  const activeHistory = latestKegChange ? history.filter(point => point.recordedAt >= latestKegChange.changedAt) : history
+  const todaysPours = activePours.filter(pour => pour.pouredAt >= startOfToday)
   const ouncesToday = todaysPours.reduce((total, pour) => total + pour.ounces, 0)
-  const averagePour = pours.length ? pours.reduce((total, pour) => total + pour.ounces, 0) / pours.length : null
-  const sevenDayRate = pours.length ? pours.reduce((total, pour) => total + pour.ounces, 0) / 7 : 0
+  const averagePour = activePours.length ? activePours.reduce((total, pour) => total + pour.ounces, 0) / activePours.length : null
+  const daysObserved = latestKegChange ? Math.max(1, (now - latestKegChange.changedAt) / (24 * 60 * 60 * 1000)) : 7
+  const sevenDayRate = activePours.length ? activePours.reduce((total, pour) => total + pour.ounces, 0) / daysObserved : 0
   const daysLeft = sevenDayRate > 0 && currentBeerOz > 0 ? currentBeerOz / sevenDayRate : null
-  const points = history.filter(point => Number.isFinite(Number(point.beerOz)))
+  const points = activeHistory.filter(point => Number.isFinite(Number(point.beerOz)))
   const width = 640
   const height = 180
   const padding = 18
@@ -1910,21 +1913,22 @@ function KegHistory({ history, pours, currentBeerOz }) {
       <h2>{todaysPours.length ? `${ouncesToday.toFixed(1)} oz poured` : 'No pours yet'}</h2>
       <div className="statusRow"><span>Pours</span><strong>{todaysPours.length}</strong></div>
       <div className="statusRow"><span>Average pour</span><strong>{averagePour == null ? '—' : `${averagePour.toFixed(1)} oz`}</strong></div>
-      <div className="statusRow"><span>Last pour</span><strong>{pours[0] ? `${pours[0].ounces.toFixed(1)} oz · ${pours[0].pouredAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : '—'}</strong></div>
+      <div className="statusRow"><span>Last pour</span><strong>{activePours[0] ? `${activePours[0].ounces.toFixed(1)} oz · ${activePours[0].pouredAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : '—'}</strong></div>
       <div className="statusRow"><span>Estimated supply</span><strong>{daysLeft == null ? 'Learning…' : `${daysLeft.toFixed(1)} days`}</strong></div>
+      <div className="statusRow"><span>Current keg</span><strong>{latestKegChange ? `Since ${latestKegChange.changedAt.toLocaleDateString([], { month: 'short', day: 'numeric' })}` : 'Original keg'}</strong></div>
     </div>
 
     <div className="card accent-keg">
       <p className="cardLabel">Recent pours</p>
-      <h2>{pours.length ? `${pours.length} this week` : 'Waiting for first pour'}</h2>
-      {pours.slice(0, 5).map(pour => <div className="statusRow" key={pour.id}><span>{pour.pouredAt.toLocaleDateString([], { weekday: 'short' })} · {pour.pouredAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span><strong>{pour.ounces.toFixed(1)} oz</strong></div>)}
-      {!pours.length && <p className="placeholderText">New ESP32 pour events will show here.</p>}
+      <h2>{activePours.length ? `${activePours.length} from this keg` : 'Waiting for first pour'}</h2>
+      {activePours.slice(0, 5).map(pour => <div className="statusRow" key={pour.id}><span>{pour.pouredAt.toLocaleDateString([], { weekday: 'short' })} · {pour.pouredAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span><strong>{pour.ounces.toFixed(1)} oz</strong></div>)}
+      {!activePours.length && <p className="placeholderText">New ESP32 pour events will show here.</p>}
     </div>
   </>
 }
 
 function KegPage({ kegData }) {
-  const { keg, history, pours, error, loading, lastUpdated } = kegData
+  const { keg, history, pours, latestKegChange, error, loading, lastUpdated } = kegData
   const percent = keg?.percent ?? 0
   const pintsLeft = keg?.pintsLeft ?? 0
   const verdict =
@@ -2033,7 +2037,7 @@ function KegPage({ kegData }) {
         </div>
       </div>
 
-      <KegHistory history={history} pours={pours} currentBeerOz={keg?.beerOz} />
+      <KegHistory history={history} pours={pours} currentBeerOz={keg?.beerOz} latestKegChange={latestKegChange} />
     </section>
   )
 }

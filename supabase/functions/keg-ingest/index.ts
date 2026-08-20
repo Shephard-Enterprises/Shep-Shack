@@ -31,5 +31,19 @@ Deno.serve(async request => {
     if (!pourResponse.ok) return json({ error: 'Reading saved, but pour event failed' }, 502)
   }
 
-  return json({ ok: true, pourRecorded: Number.isFinite(pourOz) && pourOz >= 1 && pourOz <= 64 }, 201)
+  const eventType = String((payload as Record<string, unknown>).eventType ?? '')
+  if (eventType === 'freshKeg') {
+    const changeResponse = await fetch(`${url}/rest/v1/keg_changes`, {
+      method: 'POST',
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        reading_id: reading.id,
+        starting_ounces: Number((payload as Record<string, unknown>).beerOz) || null,
+        starting_percent: Number((payload as Record<string, unknown>).percent) || null,
+      }),
+    })
+    if (!changeResponse.ok) return json({ error: 'Reading saved, but fresh-keg event failed' }, 502)
+  }
+
+  return json({ ok: true, pourRecorded: Number.isFinite(pourOz) && pourOz >= 1 && pourOz <= 64, freshKegRecorded: eventType === 'freshKeg' }, 201)
 })

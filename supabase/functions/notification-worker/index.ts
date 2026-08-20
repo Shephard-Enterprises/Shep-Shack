@@ -49,6 +49,18 @@ async function collectKegPours(): Promise<Notice[]> {
   }))
 }
 
+async function collectKegChanges(): Promise<Notice[]> {
+  const since = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+  const rows = await rest(`keg_changes?select=id,changed_at,starting_ounces,starting_percent&changed_at=gte.${encodeURIComponent(since)}&order=changed_at.asc`)
+  return (rows ?? []).map((change: any) => ({
+    key: `keg-change:${change.id}`,
+    category: 'keg' as const,
+    title: 'Fresh keg detected',
+    body: `${change.starting_ounces == null ? 'A new keg is on the scale.' : `${Math.round(Number(change.starting_ounces))} oz ready to pour`}${change.starting_percent == null ? '' : ` · ${Math.round(Number(change.starting_percent))}% full`}`,
+    url: '/?page=keg',
+  }))
+}
+
 async function collectFire(): Promise<Notice[]> {
   const response = await fetch(`${PROJECT_URL}/functions/v1/fire-watch`, { method: 'POST', headers: { 'x-worker-secret': WORKER_SECRET } })
   if (!response.ok) return []
@@ -202,7 +214,7 @@ Deno.serve(async request => {
   if (request.headers.get('x-worker-secret') !== WORKER_SECRET) return new Response('Unauthorized', { status: 401 })
   webpush.setVapidDetails('mailto:notifications@shephard-enterprises.com', Deno.env.get('VAPID_PUBLIC_KEY')!, Deno.env.get('VAPID_PRIVATE_KEY')!)
   const groups = await Promise.allSettled([
-    collectKeg(), collectKegPours(), collectFire(), collectEarthquakes(), collectOfficialAlerts(), collectOpenHouse(), collectPadres(),
+    collectKeg(), collectKegPours(), collectKegChanges(), collectFire(), collectEarthquakes(), collectOfficialAlerts(), collectOpenHouse(), collectPadres(),
     collectSoccer({ id: '22529', league: 'usa.1', key: 'sdfc', name: 'San Diego FC' }),
     collectSoccer({ id: '21423', league: 'usa.nwsl', key: 'wave', name: 'San Diego Wave' }),
   ])
