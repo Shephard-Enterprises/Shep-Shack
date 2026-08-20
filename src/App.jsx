@@ -764,7 +764,7 @@ function Dashboard({ session }) {
   }, [])
 
   useEffect(() => {
-    const updateHeader = () => setHeaderCompact(window.scrollY > 56)
+    const updateHeader = () => setHeaderCompact(current => current ? window.scrollY > 20 : window.scrollY > 90)
     updateHeader()
     window.addEventListener('scroll', updateHeader, { passive: true })
     return () => window.removeEventListener('scroll', updateHeader)
@@ -776,10 +776,11 @@ function Dashboard({ session }) {
     }
     const movePull = event => {
       if (pullStart.current == null || window.scrollY > 0) return
-      const distance = Math.max(0, Math.min(110, (event.touches[0].clientY - pullStart.current) * 0.55))
+      const rawDistance = event.touches[0].clientY - pullStart.current
+      const distance = rawDistance > 14 ? Math.min(110, (rawDistance - 14) * 0.5) : 0
       pullDistanceRef.current = distance
       setPullDistance(distance)
-      if (distance > 0) event.preventDefault()
+      if (rawDistance > 14) event.preventDefault()
     }
     const finishPull = () => {
       if (pullDistanceRef.current >= 68) {

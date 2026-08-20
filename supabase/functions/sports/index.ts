@@ -4,18 +4,6 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const PROJECT_URL = Deno.env.get('SUPABASE_URL')!
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-
-async function isAuthenticated(request: Request) {
-  const authorization = request.headers.get('authorization')
-  if (!authorization) return false
-  const response = await fetch(`${PROJECT_URL}/auth/v1/user`, {
-    headers: { apikey: SERVICE_KEY, Authorization: authorization },
-  })
-  return response.ok
-}
-
 const TEAMS = [
   { key: 'wave', name: 'San Diego Wave', shortName: 'Wave', league: 'NWSL', leagueSlug: 'usa.nwsl', teamId: '21423' },
   { key: 'sdfc', name: 'San Diego FC', shortName: 'SDFC', league: 'MLS', leagueSlug: 'usa.1', teamId: '22529' },
@@ -48,11 +36,12 @@ async function loadTeam(config: typeof TEAMS[number]) {
   const start = new Date(Date.now() - 24 * 60 * 60 * 1000)
   const end = new Date(Date.now() + 120 * 24 * 60 * 60 * 1000)
   const base = `https://site.api.espn.com/apis/site/v2/sports/soccer/${config.leagueSlug}`
+  const requestInit = { headers: { 'User-Agent': 'ShepShackDashboard/1.0 (sports scores)', Accept: 'application/json' } }
   const [scheduleResponse, futureResponse] = await Promise.all([
-    fetch(`${base}/teams/${config.teamId}/schedule`),
-    fetch(`${base}/scoreboard?dates=${compactDate(start)}-${compactDate(end)}&limit=100`),
+    fetch(`${base}/teams/${config.teamId}/schedule`, requestInit),
+    fetch(`${base}/scoreboard?dates=${compactDate(start)}-${compactDate(end)}&limit=100`, requestInit),
   ])
-  if (!scheduleResponse.ok || !futureResponse.ok) throw new Error(`${config.league} scores unavailable`)
+  if (!scheduleResponse.ok || !futureResponse.ok) throw new Error(`${config.league} scores unavailable (${scheduleResponse.status}/${futureResponse.status})`)
   const [schedule, future] = await Promise.all([scheduleResponse.json(), futureResponse.json()])
   const events = [...(schedule.events ?? []), ...(future.events ?? [])]
     .filter((event, index, all) => all.findIndex(item => item.id === event.id) === index)
@@ -66,9 +55,6 @@ async function loadTeam(config: typeof TEAMS[number]) {
 
 Deno.serve(async request => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-  if (!await isAuthenticated(request)) {
-    return Response.json({ teams: [], error: 'Your sign-in has expired. Sign out and back in to refresh sports scores.', updatedAt: new Date().toISOString() }, { headers: corsHeaders })
-  }
   const results = await Promise.allSettled(TEAMS.map(loadTeam))
   const teams = results.flatMap(result => result.status === 'fulfilled' ? [result.value] : [])
   const errors = results.flatMap(result => result.status === 'rejected' ? [result.reason?.message ?? 'Score feed unavailable'] : [])
