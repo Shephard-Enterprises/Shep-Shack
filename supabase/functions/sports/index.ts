@@ -4,6 +4,18 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+const PROJECT_URL = Deno.env.get('SUPABASE_URL')!
+const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+async function isAuthenticated(request: Request) {
+  const authorization = request.headers.get('authorization')
+  if (!authorization) return false
+  const response = await fetch(`${PROJECT_URL}/auth/v1/user`, {
+    headers: { apikey: SERVICE_KEY, Authorization: authorization },
+  })
+  return response.ok
+}
+
 const TEAMS = [
   { key: 'wave', name: 'San Diego Wave', shortName: 'Wave', league: 'NWSL', leagueSlug: 'usa.nwsl', teamId: '21423' },
   { key: 'sdfc', name: 'San Diego FC', shortName: 'SDFC', league: 'MLS', leagueSlug: 'usa.1', teamId: '22529' },
@@ -54,6 +66,9 @@ async function loadTeam(config: typeof TEAMS[number]) {
 
 Deno.serve(async request => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (!await isAuthenticated(request)) {
+    return Response.json({ teams: [], error: 'Your sign-in has expired. Sign out and back in to refresh sports scores.', updatedAt: new Date().toISOString() }, { headers: corsHeaders })
+  }
   const results = await Promise.allSettled(TEAMS.map(loadTeam))
   const teams = results.flatMap(result => result.status === 'fulfilled' ? [result.value] : [])
   const errors = results.flatMap(result => result.status === 'rejected' ? [result.reason?.message ?? 'Score feed unavailable'] : [])
