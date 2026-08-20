@@ -97,7 +97,15 @@ export default function NotificationControl({ userId, mode = 'inbox', onOpenSett
 
   async function sendTestNotification() {
     setMessage('Sending a test notification…')
-    const { data, error } = await supabase.functions.invoke('test-push')
+    const { data: sessionData, error: sessionError } = await supabase.auth.refreshSession()
+    const accessToken = sessionData?.session?.access_token
+    if (sessionError || !accessToken) {
+      setMessage('Your sign-in has expired. Sign out, sign back in, then try the test again.')
+      return
+    }
+    const { data, error } = await supabase.functions.invoke('test-push', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
     let detail = data?.error
     if (!detail && error?.context?.json) {
       try { detail = (await error.context.json())?.error } catch { /* Use the SDK message below. */ }
