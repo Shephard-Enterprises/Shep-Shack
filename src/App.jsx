@@ -1870,8 +1870,61 @@ function groupDailyForecast(periods) {
   return days.slice(0, 7)
 }
 
+function KegHistory({ history, pours, currentBeerOz }) {
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const todaysPours = pours.filter(pour => pour.pouredAt >= startOfToday)
+  const ouncesToday = todaysPours.reduce((total, pour) => total + pour.ounces, 0)
+  const averagePour = pours.length ? pours.reduce((total, pour) => total + pour.ounces, 0) / pours.length : null
+  const sevenDayRate = pours.length ? pours.reduce((total, pour) => total + pour.ounces, 0) / 7 : 0
+  const daysLeft = sevenDayRate > 0 && currentBeerOz > 0 ? currentBeerOz / sevenDayRate : null
+  const points = history.filter(point => Number.isFinite(Number(point.beerOz)))
+  const width = 640
+  const height = 180
+  const padding = 18
+  const values = points.map(point => Number(point.beerOz))
+  const minValue = values.length ? Math.max(0, Math.min(...values) - 8) : 0
+  const maxValue = values.length ? Math.max(...values) + 8 : 640
+  const range = Math.max(1, maxValue - minValue)
+  const line = points.map((point, index) => {
+    const x = padding + (index / Math.max(1, points.length - 1)) * (width - padding * 2)
+    const y = height - padding - ((Number(point.beerOz) - minValue) / range) * (height - padding * 2)
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+
+  return <>
+    <div className="card wideCard accent-keg kegHistoryCard">
+      <div className="cardHeaderRow"><div><p className="cardLabel">Last 24 hours</p><h2>Keg level history</h2></div><span className="cardMeta">{points.length} readings</span></div>
+      {points.length > 1 ? <>
+        <svg className="kegChart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Beer remaining over the last 24 hours">
+          <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} className="kegChartGrid" />
+          <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} className="kegChartGrid" />
+          <polyline points={line} className="kegChartLine" />
+        </svg>
+        <div className="kegChartLabels"><span>24 hours ago</span><strong>{Math.round(currentBeerOz ?? values.at(-1))} oz now</strong><span>Now</span></div>
+      </> : <p className="placeholderText">History will appear after more readings arrive.</p>}
+    </div>
+
+    <div className="card accent-keg">
+      <p className="cardLabel">Today at the tap</p>
+      <h2>{todaysPours.length ? `${ouncesToday.toFixed(1)} oz poured` : 'No pours yet'}</h2>
+      <div className="statusRow"><span>Pours</span><strong>{todaysPours.length}</strong></div>
+      <div className="statusRow"><span>Average pour</span><strong>{averagePour == null ? '—' : `${averagePour.toFixed(1)} oz`}</strong></div>
+      <div className="statusRow"><span>Last pour</span><strong>{pours[0] ? `${pours[0].ounces.toFixed(1)} oz · ${pours[0].pouredAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : '—'}</strong></div>
+      <div className="statusRow"><span>Estimated supply</span><strong>{daysLeft == null ? 'Learning…' : `${daysLeft.toFixed(1)} days`}</strong></div>
+    </div>
+
+    <div className="card accent-keg">
+      <p className="cardLabel">Recent pours</p>
+      <h2>{pours.length ? `${pours.length} this week` : 'Waiting for first pour'}</h2>
+      {pours.slice(0, 5).map(pour => <div className="statusRow" key={pour.id}><span>{pour.pouredAt.toLocaleDateString([], { weekday: 'short' })} · {pour.pouredAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span><strong>{pour.ounces.toFixed(1)} oz</strong></div>)}
+      {!pours.length && <p className="placeholderText">New ESP32 pour events will show here.</p>}
+    </div>
+  </>
+}
+
 function KegPage({ kegData }) {
-  const { keg, error, loading, lastUpdated } = kegData
+  const { keg, history, pours, error, loading, lastUpdated } = kegData
   const percent = keg?.percent ?? 0
   const pintsLeft = keg?.pintsLeft ?? 0
   const verdict =
@@ -1979,6 +2032,8 @@ function KegPage({ kegData }) {
           <strong>{percent >= 20 ? 'Pour responsibly' : 'Text the supplier'}</strong>
         </div>
       </div>
+
+      <KegHistory history={history} pours={pours} currentBeerOz={keg?.beerOz} />
     </section>
   )
 }

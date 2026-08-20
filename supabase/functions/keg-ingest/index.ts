@@ -15,8 +15,21 @@ Deno.serve(async request => {
 
   const response = await fetch(`${url}/rest/v1/keg_readings`, {
     method: 'POST',
-    headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
     body: JSON.stringify({ payload }),
   })
-  return response.ok ? json({ ok: true }, 201) : json({ error: 'Could not save reading' }, 502)
+  if (!response.ok) return json({ error: 'Could not save reading' }, 502)
+
+  const [reading] = await response.json()
+  const pourOz = Number((payload as Record<string, unknown>).pourOz)
+  if (Number.isFinite(pourOz) && pourOz >= 1 && pourOz <= 64) {
+    const pourResponse = await fetch(`${url}/rest/v1/keg_pours`, {
+      method: 'POST',
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ reading_id: reading.id, ounces: pourOz, beer_oz_after: Number((payload as Record<string, unknown>).beerOz) || null }),
+    })
+    if (!pourResponse.ok) return json({ error: 'Reading saved, but pour event failed' }, 502)
+  }
+
+  return json({ ok: true, pourRecorded: Number.isFinite(pourOz) && pourOz >= 1 && pourOz <= 64 }, 201)
 })
