@@ -1070,6 +1070,35 @@ body {
 }
 
 /* ---------- iPhone-first layout ---------- */
+.pullRefresh {
+  position: fixed;
+  z-index: 3000;
+  top: max(8px, env(safe-area-inset-top));
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-dim);
+  background: rgba(8, 24, 26, .96);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .38);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, calc(-52px + var(--pull-distance)));
+  transition: opacity .12s ease, color .12s ease;
+}
+
+.pullRefresh.visible { opacity: 1; }
+.pullRefresh.ready { color: var(--accent); }
+.pullRefresh span { font-size: 20px; line-height: 1; }
+.pullRefresh strong { font-size: 11px; white-space: nowrap; }
+.pullRefresh.refreshing span { animation: spin .7s linear infinite; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
 @media (max-width: 760px) {
   body { overscroll-behavior-y: none; }
   .dashboard { width: 100%; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) calc(92px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); gap: 14px; }

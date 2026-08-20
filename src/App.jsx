@@ -210,8 +210,8 @@ function useWeather() {
           dailyUrl.current = data.properties.forecast
         }
         const [hRes, dRes] = await Promise.all([
-          fetch(hourlyUrl.current, { headers: { 'User-Agent': 'ShepShackDashboard/1.0' } }),
-          fetch(dailyUrl.current, { headers: { 'User-Agent': 'ShepShackDashboard/1.0' } }),
+          fetch(hourlyUrl.current, { cache: 'no-store', headers: { 'User-Agent': 'ShepShackDashboard/1.0' } }),
+          fetch(dailyUrl.current, { cache: 'no-store', headers: { 'User-Agent': 'ShepShackDashboard/1.0' } }),
         ])
         if (!hRes.ok) throw new Error(`NWS hourly HTTP ${hRes.status}`)
         const hData = await hRes.json()
@@ -228,7 +228,7 @@ function useWeather() {
             timezone: TIME_ZONE,
             forecast_days: '1',
           })
-          const uvRes = await fetch(`https://api.open-meteo.com/v1/forecast?${uvParams.toString()}`)
+          const uvRes = await fetch(`https://api.open-meteo.com/v1/forecast?${uvParams.toString()}`, { cache: 'no-store' })
           if (uvRes.ok) {
             const uvData = await uvRes.json()
             uvIndex = uvData.current?.uv_index ?? null
@@ -277,7 +277,7 @@ function useWeather() {
       }
     }
     load()
-    const id = setInterval(load, 10 * 60_000)
+    const id = setInterval(load, 2 * 60_000)
     return () => clearInterval(id)
   }, [])
 
@@ -730,6 +730,10 @@ function PasswordResetPage({ onComplete }) {
 function Dashboard({ session }) {
   const [time, setTime] = useState(new Date())
   const [headerCompact, setHeaderCompact] = useState(false)
+  const [pullDistance, setPullDistance] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
+  const pullStart = useRef(null)
+  const pullDistanceRef = useRef(0)
   const [activePage, setActivePage] = useState(() => {
     const requestedPage = new URLSearchParams(window.location.search).get('page')
     const requested = requestedPage === 'padres' ? 'sports' : requestedPage
@@ -766,12 +770,49 @@ function Dashboard({ session }) {
     return () => window.removeEventListener('scroll', updateHeader)
   }, [])
 
+  useEffect(() => {
+    const startPull = event => {
+      if (window.scrollY <= 0 && event.touches.length === 1) pullStart.current = event.touches[0].clientY
+    }
+    const movePull = event => {
+      if (pullStart.current == null || window.scrollY > 0) return
+      const distance = Math.max(0, Math.min(110, (event.touches[0].clientY - pullStart.current) * 0.55))
+      pullDistanceRef.current = distance
+      setPullDistance(distance)
+      if (distance > 0) event.preventDefault()
+    }
+    const finishPull = () => {
+      if (pullDistanceRef.current >= 68) {
+        setRefreshing(true)
+        setPullDistance(68)
+        window.setTimeout(() => window.location.reload(), 300)
+      } else {
+        pullDistanceRef.current = 0
+        setPullDistance(0)
+      }
+      pullStart.current = null
+    }
+    window.addEventListener('touchstart', startPull, { passive: true })
+    window.addEventListener('touchmove', movePull, { passive: false })
+    window.addEventListener('touchend', finishPull)
+    window.addEventListener('touchcancel', finishPull)
+    return () => {
+      window.removeEventListener('touchstart', startPull)
+      window.removeEventListener('touchmove', movePull)
+      window.removeEventListener('touchend', finishPull)
+      window.removeEventListener('touchcancel', finishPull)
+    }
+  }, [])
+
   const currentTime = time.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
   const currentDate = time.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })
   const { weather } = weatherData
 
   return (
     <main className="dashboard">
+      <div className={`pullRefresh ${pullDistance > 0 ? 'visible' : ''} ${pullDistance >= 68 || refreshing ? 'ready' : ''} ${refreshing ? 'refreshing' : ''}`} style={{ '--pull-distance': `${pullDistance}px` }} aria-hidden="true">
+        <span>↻</span><strong>{refreshing ? 'Refreshing…' : pullDistance >= 68 ? 'Release to refresh' : 'Pull to refresh'}</strong>
+      </div>
       <section className={`heroCard ${headerCompact ? 'compact' : ''}`} aria-label="Current time and weather">
         <div className="logoPanel">
           <img src={`${import.meta.env.BASE_URL}shepshack.png`} alt="Shep Shack logo" className="houseLogo" />
