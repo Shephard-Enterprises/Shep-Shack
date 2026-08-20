@@ -15,11 +15,11 @@ export function useKegStatus() {
     async function load() {
       if (document.visibilityState === 'hidden') return
       const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-      const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+      const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
       const [{ data, error: dbError }, { data: readingHistory }, { data: pourHistory }, { data: kegChange }] = await Promise.all([
         supabase.from('keg_readings').select('payload, recorded_at').order('recorded_at', { ascending: false }).limit(1).maybeSingle(),
         supabase.from('keg_readings').select('payload, recorded_at').gte('recorded_at', since24h).order('recorded_at', { ascending: true }).limit(1500),
-        supabase.from('keg_pours').select('id,poured_at,ounces,beer_oz_after').gte('poured_at', since7d).order('poured_at', { ascending: false }).limit(200),
+        supabase.from('keg_pours').select('id,poured_at,ounces,beer_oz_after').gte('poured_at', since30d).order('poured_at', { ascending: false }).limit(500),
         supabase.from('keg_changes').select('id,changed_at,starting_ounces,starting_percent').order('changed_at', { ascending: false }).limit(1).maybeSingle(),
       ])
       if (cancelled) return

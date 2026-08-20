@@ -1,4 +1,4 @@
-const CACHE = 'shep-shack-v16'
+const CACHE = 'shep-shack-v17'
 const BASE = new URL(self.registration.scope).pathname.replace(/\/$/, '')
 const SHELL = [`${BASE}/`, `${BASE}/manifest.webmanifest`, `${BASE}/shepshack.png`, `${BASE}/padres.svg`, `${BASE}/favicon.svg`]
 

@@ -1894,6 +1894,26 @@ function KegHistory({ history, pours, currentBeerOz, latestKegChange }) {
     const y = height - padding - ((Number(point.beerOz) - minValue) / range) * (height - padding * 2)
     return `${x.toFixed(1)},${y.toFixed(1)}`
   }).join(' ')
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const activityByDay = dayNames.map((label, day) => ({
+    label,
+    ounces: pours.filter(pour => pour.pouredAt.getDay() === day).reduce((total, pour) => total + pour.ounces, 0),
+    pours: pours.filter(pour => pour.pouredAt.getDay() === day).length,
+  }))
+  const activityByWindow = Array.from({ length: 8 }, (_, index) => {
+    const startHour = index * 3
+    const matchingPours = pours.filter(pour => Math.floor(pour.pouredAt.getHours() / 3) === index)
+    return {
+      startHour,
+      ounces: matchingPours.reduce((total, pour) => total + pour.ounces, 0),
+      pours: matchingPours.length,
+    }
+  })
+  const busiestDay = activityByDay.reduce((best, day) => day.ounces > best.ounces ? day : best, activityByDay[0])
+  const busiestWindow = activityByWindow.reduce((best, window) => window.ounces > best.ounces ? window : best, activityByWindow[0])
+  const maxDayOunces = Math.max(...activityByDay.map(day => day.ounces), 1)
+  const formatHour = hour => hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`
+  const busiestWindowLabel = `${formatHour(busiestWindow.startHour)}–${formatHour((busiestWindow.startHour + 3) % 24)}`
 
   return <>
     <div className="card wideCard accent-keg kegHistoryCard">
@@ -1923,6 +1943,27 @@ function KegHistory({ history, pours, currentBeerOz, latestKegChange }) {
       <h2>{activePours.length ? `${activePours.length} from this keg` : 'Waiting for first pour'}</h2>
       {activePours.slice(0, 5).map(pour => <div className="statusRow" key={pour.id}><span>{pour.pouredAt.toLocaleDateString([], { weekday: 'short' })} · {pour.pouredAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span><strong>{pour.ounces.toFixed(1)} oz</strong></div>)}
       {!activePours.length && <p className="placeholderText">New ESP32 pour events will show here.</p>}
+    </div>
+
+    <div className="card wideCard accent-keg drinkingTimesCard">
+      <div className="cardHeaderRow">
+        <div><p className="cardLabel">Last 30 days</p><h2>Busiest drinking times</h2></div>
+        <span className="cardMeta">{pours.length} recorded {pours.length === 1 ? 'pour' : 'pours'}</span>
+      </div>
+      {pours.length ? <>
+        <div className="drinkingHighlights">
+          <div><span>Busiest day</span><strong>{busiestDay.label}</strong><small>{busiestDay.pours} {busiestDay.pours === 1 ? 'pour' : 'pours'} · {busiestDay.ounces.toFixed(1)} oz</small></div>
+          <div><span>Prime time</span><strong>{busiestWindowLabel}</strong><small>{busiestWindow.pours} {busiestWindow.pours === 1 ? 'pour' : 'pours'} · {busiestWindow.ounces.toFixed(1)} oz</small></div>
+        </div>
+        <div className="drinkingWeek" role="img" aria-label="Ounces poured by day of week over the last 30 days">
+          {activityByDay.map(day => <div className="drinkingDay" key={day.label} title={`${day.label}: ${day.ounces.toFixed(1)} oz`}>
+            <span>{day.ounces ? `${Math.round(day.ounces)}` : ''}</span>
+            <div className="drinkingBarTrack"><div className="drinkingBar" style={{ height: `${Math.max(day.ounces ? 8 : 0, (day.ounces / maxDayOunces) * 100)}%` }} /></div>
+            <strong>{day.label}</strong>
+          </div>)}
+        </div>
+        {pours.length < 5 && <p className="placeholderText drinkingLearning">Early trend—this gets more useful after a few more pours.</p>}
+      </> : <p className="placeholderText">No pour history yet. This chart will start learning automatically with the next keg.</p>}
     </div>
   </>
 }
