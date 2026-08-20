@@ -1371,6 +1371,133 @@ body {
   text-align: center;
 }
 
+.weatherRadarCard {
+  overflow: hidden;
+}
+
+.fireMap.radarMap {
+  width: 100%;
+  max-width: none;
+  aspect-ratio: 16 / 9;
+  margin-top: 14px;
+  background: #192225;
+}
+
+.radarMap .radarBaseTiles {
+  filter: grayscale(.72) brightness(.48) contrast(1.16);
+}
+
+.radarMap .leaflet-control-attribution {
+  background: rgba(7, 20, 22, .76);
+  color: rgba(244, 242, 236, .72);
+}
+
+.radarMap .leaflet-control-attribution a {
+  color: #9ed7da;
+}
+
+.radarHomeLabel {
+  border: 0;
+  background: rgba(7, 20, 22, .82);
+  color: #fff;
+  box-shadow: none;
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.radarHomeLabel::before {
+  display: none;
+}
+
+.radarFallback {
+  z-index: 900;
+  color: var(--text-dim);
+  background: rgba(7, 20, 22, .9);
+}
+
+.radarControls {
+  display: grid;
+  grid-template-columns: auto minmax(100px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.radarPlayButton {
+  border: 1px solid rgba(104, 191, 196, .32);
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: var(--text);
+  background: rgba(104, 191, 196, .08);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.radarPlayButton:disabled {
+  opacity: .5;
+  cursor: wait;
+}
+
+.radarTimeline {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: center;
+  gap: 4px;
+}
+
+.radarTimeline button {
+  min-width: 0;
+  height: 5px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  background: rgba(244, 242, 236, .16);
+  cursor: pointer;
+}
+
+.radarTimeline button.active {
+  background: var(--status-info);
+  box-shadow: 0 0 8px rgba(104, 191, 196, .44);
+}
+
+.radarControls > span,
+.radarNote {
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.radarForecastStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.radarNote {
+  margin: 9px 0 0;
+}
+
+@media (max-width: 600px) {
+  .fireMap.radarMap {
+    width: 100%;
+    aspect-ratio: 1.15;
+  }
+
+  .radarControls {
+    grid-template-columns: auto 1fr;
+  }
+
+  .radarControls > span {
+    display: none;
+  }
+}
+
 .fireMapTooltip {
   max-width: 112px;
   padding: 3px 5px;

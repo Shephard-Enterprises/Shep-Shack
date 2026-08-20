@@ -1744,6 +1744,133 @@ function SportsPage({ padresData, soccerData }) {
   )
 }
 
+function WeatherRadar({ hourly }) {
+  const mapRef = useRef(null)
+  const mapInstance = useRef(null)
+  const radarLayer = useRef(null)
+  const [frames, setFrames] = useState([])
+  const [frameIndex, setFrameIndex] = useState(0)
+  const [playing, setPlaying] = useState(true)
+  const [radarError, setRadarError] = useState(null)
+  const [mapReady, setMapReady] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadFrames() {
+      try {
+        const response = await fetch('https://api.rainviewer.com/public/weather-maps.json')
+        if (!response.ok) throw new Error(`Radar HTTP ${response.status}`)
+        const data = await response.json()
+        const recentFrames = (data.radar?.past ?? []).slice(-12).map(frame => ({ ...frame, host: data.host }))
+        if (!recentFrames.length) throw new Error('No radar frames available')
+        if (!cancelled) {
+          setFrames(recentFrames)
+          setFrameIndex(recentFrames.length - 1)
+          setRadarError(null)
+        }
+      } catch (error) {
+        if (!cancelled) setRadarError(error.message)
+      }
+    }
+    loadFrames()
+    const refreshId = setInterval(loadFrames, 5 * 60_000)
+    return () => { cancelled = true; clearInterval(refreshId) }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    loadLeaflet().then(L => {
+      if (cancelled || !mapRef.current || mapInstance.current) return
+      const map = L.map(mapRef.current, {
+        zoomControl: false,
+        attributionControl: false,
+        dragging: false,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+        boxZoom: false,
+        keyboard: false,
+        touchZoom: false,
+        minZoom: 6,
+        maxZoom: 7,
+      }).setView([SANTEE.lat, SANTEE.lon], 7)
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        className: 'radarBaseTiles',
+        attribution: '&copy; OpenStreetMap contributors',
+      }).addTo(map)
+      L.circleMarker([SANTEE.lat, SANTEE.lon], {
+        radius: 5,
+        color: '#f4f2ec',
+        weight: 2,
+        fillColor: '#e0584f',
+        fillOpacity: 1,
+      }).bindTooltip('Santee', { permanent: true, direction: 'right', offset: [7, 0], className: 'radarHomeLabel' }).addTo(map)
+      L.control.attribution({ prefix: false }).addTo(map)
+      mapInstance.current = map
+      setMapReady(true)
+      requestAnimationFrame(() => map.invalidateSize())
+      setTimeout(() => map.invalidateSize(), 250)
+    }).catch(error => {
+      if (!cancelled) setRadarError(error.message)
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => () => {
+    mapInstance.current?.remove()
+    mapInstance.current = null
+    radarLayer.current = null
+  }, [])
+
+  useEffect(() => {
+    if (!playing || frames.length < 2) return undefined
+    const animationId = setInterval(() => setFrameIndex(index => (index + 1) % frames.length), 850)
+    return () => clearInterval(animationId)
+  }, [playing, frames.length])
+
+  useEffect(() => {
+    const map = mapInstance.current
+    const frame = frames[frameIndex]
+    if (!map || !frame || !window.L) return
+    if (radarLayer.current) radarLayer.current.remove()
+    radarLayer.current = window.L.tileLayer(`${frame.host}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`, {
+      tileSize: 256,
+      opacity: 0.72,
+      maxNativeZoom: 7,
+      maxZoom: 7,
+      attribution: 'Radar: <a href="https://www.rainviewer.com/" target="_blank">RainViewer</a>',
+    }).addTo(map)
+  }, [frames, frameIndex, mapReady])
+
+  const activeFrame = frames[frameIndex]
+  const frameTime = activeFrame ? new Date(activeFrame.time * 1000) : null
+  const upcomingRain = hourly.find(period => period.precipChance >= 50)
+
+  return (
+    <div className="card wideCard accent-weather weatherRadarCard">
+      <div className="cardHeaderRow">
+        <div><p className="cardLabel">Near-real-time Doppler</p><h2>Regional rain radar</h2></div>
+        {frameTime && <span className="cardMeta">{frameIndex === frames.length - 1 ? 'Latest · ' : ''}{frameTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>}
+      </div>
+      <div ref={mapRef} className="fireMap radarMap">
+        {radarError && <div className="fireMapFallback radarFallback">Radar temporarily unavailable: {radarError}</div>}
+      </div>
+      <div className="radarControls">
+        <button type="button" className="radarPlayButton" onClick={() => setPlaying(value => !value)} disabled={frames.length < 2}>{playing ? 'Pause' : 'Play'} radar</button>
+        <div className="radarTimeline" aria-label="Radar timeline">
+          {frames.map((frame, index) => <button type="button" className={index === frameIndex ? 'active' : ''} aria-label={new Date(frame.time * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} onClick={() => { setPlaying(false); setFrameIndex(index) }} key={frame.time} />)}
+        </div>
+        <span>{frames.length ? 'Past 2 hours' : 'Loading radar…'}</span>
+      </div>
+      <div className="radarForecastStatus">
+        <span className={`statusDot ${upcomingRain ? 'info' : 'good'}`} />
+        <span>{upcomingRain ? `Rain chance reaches ${upcomingRain.precipChance}% around ${upcomingRain.time}` : 'No likely rain in the next 12 hours'}</span>
+      </div>
+      <p className="radarNote">Radar refreshes every five minutes. Forecast timing—not radar alone—drives rain notifications.</p>
+    </div>
+  )
+}
+
 function WeatherPage({ weatherData }) {
   const { weather, hourly, daily, error, loading, lastUpdated } = weatherData
   const dailyForecast = groupDailyForecast(daily)
@@ -1770,6 +1897,8 @@ function WeatherPage({ weatherData }) {
         </div>
         {error && <p style={{ color: 'var(--status-alert)', fontSize: 13, marginTop: 8 }}>{error}</p>}
       </div>
+
+      <WeatherRadar hourly={hourly} />
 
       {hourly.length > 0 && (
         <div className="card wideCard accent-weather">

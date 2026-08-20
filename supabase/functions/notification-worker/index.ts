@@ -151,6 +151,35 @@ async function collectOpenHouse(): Promise<Notice[]> {
   }]
 }
 
+async function collectRainSoon(): Promise<Notice[]> {
+  const query = new URLSearchParams({
+    latitude: String(HOME.lat), longitude: String(HOME.lon),
+    minutely_15: 'precipitation,precipitation_probability',
+    forecast_minutely_15: '8', timezone: 'America/Los_Angeles',
+  })
+  const response = await fetch(`https://api.open-meteo.com/v1/forecast?${query}`)
+  if (!response.ok) return []
+  const data = await response.json()
+  const times: string[] = data.minutely_15?.time ?? []
+  const precipitation: number[] = data.minutely_15?.precipitation ?? []
+  const probabilities: number[] = data.minutely_15?.precipitation_probability ?? []
+  const firstRainIndex = times.slice(0, 5).findIndex((_, index) =>
+    Number(precipitation[index]) >= 0.05 && Number(probabilities[index]) >= 50
+  )
+  if (firstRainIndex < 0) return []
+  const startTime = times[firstRainIndex]
+  const startHour = Number(startTime.slice(11, 13))
+  const startMinute = startTime.slice(14, 16)
+  const timeLabel = `${startHour % 12 || 12}:${startMinute} ${startHour < 12 ? 'AM' : 'PM'}`
+  return [{
+    key: `rain-soon:${startTime.slice(0, 10)}`,
+    category: 'weather',
+    title: 'Rain expected soon',
+    body: `Rain is forecast around ${timeLabel} · ${Math.round(Number(probabilities[firstRainIndex]))}% chance.`,
+    url: '/?page=weather',
+  }]
+}
+
 async function collectPadres(): Promise<Notice[]> {
   const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
   const response = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${date}&teamId=135&hydrate=linescore`)
@@ -214,7 +243,7 @@ Deno.serve(async request => {
   if (request.headers.get('x-worker-secret') !== WORKER_SECRET) return new Response('Unauthorized', { status: 401 })
   webpush.setVapidDetails('mailto:notifications@shephard-enterprises.com', Deno.env.get('VAPID_PUBLIC_KEY')!, Deno.env.get('VAPID_PRIVATE_KEY')!)
   const groups = await Promise.allSettled([
-    collectKeg(), collectKegPours(), collectKegChanges(), collectFire(), collectEarthquakes(), collectOfficialAlerts(), collectOpenHouse(), collectPadres(),
+    collectKeg(), collectKegPours(), collectKegChanges(), collectFire(), collectEarthquakes(), collectOfficialAlerts(), collectOpenHouse(), collectRainSoon(), collectPadres(),
     collectSoccer({ id: '22529', league: 'usa.1', key: 'sdfc', name: 'San Diego FC' }),
     collectSoccer({ id: '21423', league: 'usa.nwsl', key: 'wave', name: 'San Diego Wave' }),
   ])
