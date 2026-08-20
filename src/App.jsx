@@ -451,7 +451,6 @@ function usePadres() {
         const g = data.dates?.[0]?.games?.[0]
 
         if (g) {
-          setLatestGame(null)
           setNextGame(null)
           const padresAway = g.teams.away.team.id === 135
           const padresSide = padresAway ? g.teams.away : g.teams.home
@@ -472,43 +471,28 @@ function usePadres() {
           })
         } else {
           setGame(null)
-          const weekAgo = new Date()
-          weekAgo.setDate(weekAgo.getDate() - 7)
-          const yesterday = new Date()
-          yesterday.setDate(yesterday.getDate() - 1)
-          const tomorrow = new Date()
-          tomorrow.setDate(tomorrow.getDate() + 1)
-          const nextWeek = new Date()
-          nextWeek.setDate(nextWeek.getDate() + 7)
-          const [recentRes, nRes] = await Promise.all([
-            fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=135&startDate=${localDateStr(weekAgo)}&endDate=${localDateStr(yesterday)}`),
-            fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=135&startDate=${localDateStr(tomorrow)}&endDate=${localDateStr(nextWeek)}`),
-          ])
-          if (recentRes.ok) {
-            const recentData = await recentRes.json()
-            const recentGames = (recentData.dates ?? []).flatMap(date => date.games ?? [])
-            const latest = recentGames.filter(item => item.status.abstractGameState === 'Final').at(-1)
-            if (latest) {
-              const padresAway = latest.teams.away.team.id === 135
-              const padresSide = padresAway ? latest.teams.away : latest.teams.home
-              const oppSide = padresAway ? latest.teams.home : latest.teams.away
-              setLatestGame({
-                gamePk: latest.gamePk, state: 'Final', detailedState: latest.status.detailedState,
-                padresScore: padresSide.score ?? 0, opponentScore: oppSide.score ?? 0,
-                opponent: oppSide.team.name, padresAway, padresHome: !padresAway,
-                venue: latest.venue?.name, gameDate: latest.gameDate,
-              })
-            }
-          }
-          if (nRes.ok) {
-            const nData = await nRes.json()
-            const ng = nData.dates?.[0]?.games?.[0]
-            if (ng) {
-              const padresAway = ng.teams.away.team.id === 135
-              const padresSide = padresAway ? ng.teams.away : ng.teams.home
-              const oppSide = padresAway ? ng.teams.home : ng.teams.away
-              setNextGame({ gameDate: ng.gameDate, opponent: oppSide.team.name, padresHome: !padresAway, venue: ng.venue?.name, wins: padresSide.leagueRecord?.wins, losses: padresSide.leagueRecord?.losses })
-            }
+        }
+        const weekAgo = new Date()
+        weekAgo.setDate(weekAgo.getDate() - 7)
+        const yesterday = new Date()
+        yesterday.setDate(yesterday.getDate() - 1)
+        const recentRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=135&startDate=${localDateStr(weekAgo)}&endDate=${localDateStr(yesterday)}`)
+        if (recentRes.ok) {
+          const recentData = await recentRes.json()
+          const recentGames = (recentData.dates ?? []).flatMap(date => date.games ?? [])
+          const latest = recentGames.filter(item => item.status.abstractGameState === 'Final').at(-1)
+          if (latest) {
+            const padresAway = latest.teams.away.team.id === 135
+            const padresSide = padresAway ? latest.teams.away : latest.teams.home
+            const oppSide = padresAway ? latest.teams.home : latest.teams.away
+            setLatestGame({
+              gamePk: latest.gamePk, state: 'Final', detailedState: latest.status.detailedState,
+              padresScore: padresSide.score ?? 0, opponentScore: oppSide.score ?? 0,
+              opponent: oppSide.team.name, padresAway, padresHome: !padresAway,
+              venue: latest.venue?.name, gameDate: latest.gameDate,
+            })
+          } else {
+            setLatestGame(null)
           }
         }
         const season = new Date().getFullYear()
@@ -1709,6 +1693,7 @@ function PadresScoreCard({ padresData }) {
   const isLive = game?.state === 'Live'
   const hasScore = Boolean(scoreGame)
   const gameDate = event?.gameDate ? new Date(event.gameDate) : null
+  const previousGame = latestGame && latestGame.gamePk !== scoreGame?.gamePk ? latestGame : null
   return (
     <div className={`card accent-sport soccerCard ${isLive ? 'isLive' : ''}`}>
       <div className="soccerTeamHeader">
@@ -1734,6 +1719,10 @@ function PadresScoreCard({ padresData }) {
       <div className="statusRow"><span>NL West</span><strong>{standing?.divisionRank ? `#${standing.divisionRank}${standing.gamesBack && standing.gamesBack !== '-' ? ` · ${standing.gamesBack} GB` : ''}` : '—'}</strong></div>
       <div className="statusRow"><span>National League</span><strong>{standing?.leagueRank ? `#${standing.leagueRank}` : '—'}</strong></div>
       {standing?.wildCardRank && <div className="statusRow"><span>Wild Card</span><strong>#{standing.wildCardRank}</strong></div>}
+      {previousGame && <div className="sportsPreviousResult">
+        <span>Previous · {new Date(previousGame.gameDate).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+        <strong>SD {previousGame.padresScore}–{previousGame.opponentScore} {teamAbbr(previousGame.opponent)}</strong>
+      </div>}
       {upcomingGame && <div className="soccerUpcoming"><span>Next game</span><strong>{upcomingGame.padresHome ? 'vs' : '@'} {teamAbbr(upcomingGame.opponent)} · {new Date(upcomingGame.gameDate).toLocaleDateString([], { month: 'short', day: 'numeric' })} · {new Date(upcomingGame.gameDate).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</strong></div>}
     </div>
   )

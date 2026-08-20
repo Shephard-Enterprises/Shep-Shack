@@ -1605,6 +1605,31 @@ body {
   font-size: 12px;
 }
 
+.sportsPreviousResult {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 11px;
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.sportsPreviousResult span {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.sportsPreviousResult strong {
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
 .sportsDetails {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
