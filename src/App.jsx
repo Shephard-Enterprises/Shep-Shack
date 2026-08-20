@@ -1898,8 +1898,6 @@ function WeatherPage({ weatherData }) {
         {error && <p style={{ color: 'var(--status-alert)', fontSize: 13, marginTop: 8 }}>{error}</p>}
       </div>
 
-      <WeatherRadar hourly={hourly} />
-
       {hourly.length > 0 && (
         <div className="card wideCard accent-weather">
           <p className="cardLabel">Hourly forecast</p>
@@ -1947,6 +1945,8 @@ function WeatherPage({ weatherData }) {
           </div>
         </div>
       )}
+
+      <WeatherRadar hourly={hourly} />
     </section>
   )
 }
