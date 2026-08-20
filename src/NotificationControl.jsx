@@ -98,7 +98,11 @@ export default function NotificationControl({ userId, mode = 'inbox', onOpenSett
   async function sendTestNotification() {
     setMessage('Sending a test notification…')
     const { data, error } = await supabase.functions.invoke('test-push')
-    if (error || data?.error) setMessage(`Test failed: ${data?.error ?? error.message}`)
+    let detail = data?.error
+    if (!detail && error?.context?.json) {
+      try { detail = (await error.context.json())?.error } catch { /* Use the SDK message below. */ }
+    }
+    if (error || detail) setMessage(`Test failed: ${detail ?? error.message}`)
     else setMessage(`Test sent to ${data.sent} registered phone${data.sent === 1 ? '' : 's'}.`)
   }
 

@@ -30,9 +30,9 @@ async function rest(path: string, init: RequestInit = {}) {
 Deno.serve(async request => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   const userId = userIdFromRequest(request)
-  if (!userId) return Response.json({ error: 'No authenticated user.' }, { status: 401, headers: corsHeaders })
+  if (!userId) return Response.json({ sent: 0, error: 'The test request did not include a signed-in user.' }, { headers: corsHeaders })
   const subscriptions = await rest(`push_subscriptions?select=id,endpoint,p256dh,auth&user_id=eq.${userId}`)
-  if (!subscriptions?.length) return Response.json({ error: 'This account has no registered phone.' }, { status: 404, headers: corsHeaders })
+  if (!subscriptions?.length) return Response.json({ sent: 0, error: 'This account has no registered phone. Turn notifications off, then enable them again.' }, { headers: corsHeaders })
 
   webpush.setVapidDetails('mailto:shepshack@localhost', Deno.env.get('VAPID_PUBLIC_KEY')!, Deno.env.get('VAPID_PRIVATE_KEY')!)
   const results = await Promise.all(subscriptions.map(async (subscription: any) => {
@@ -49,5 +49,5 @@ Deno.serve(async request => {
   }))
   const sent = results.filter(result => result.sent).length
   const errors = results.flatMap(result => result.error ? [result.error] : [])
-  return Response.json({ sent, error: errors.length ? errors.join(' · ') : null }, { status: sent ? 200 : 502, headers: corsHeaders })
+  return Response.json({ sent, error: errors.length ? errors.join(' · ') : null }, { headers: corsHeaders })
 })
