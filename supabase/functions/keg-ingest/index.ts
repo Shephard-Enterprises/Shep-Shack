@@ -1,3 +1,6 @@
+import { resolveScaleId } from '../_shared/keg-scale-policy.js'
+import { isRecordedPour } from '../_shared/keg-pour-policy.js'
+
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'content-type, x-keg-secret', 'Access-Control-Allow-Methods': 'POST, OPTIONS' }
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
@@ -8,42 +11,44 @@ Deno.serve(async request => {
   if (!expected || request.headers.get('x-keg-secret') !== expected) return json({ error: 'Unauthorized' }, 401)
 
   const payload = await request.json().catch(() => null)
-  if (!payload || typeof payload !== 'object') return json({ error: 'Invalid reading' }, 400)
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return json({ error: 'Invalid reading' }, 400)
+  const scaleId = resolveScaleId(payload)
+  if (!scaleId) return json({ error: 'Unknown scaleId' }, 400)
   const url = Deno.env.get('SUPABASE_URL')
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   if (!url || !serviceKey) return json({ error: 'Server configuration error' }, 500)
 
-  const response = await fetch(`${url}/rest/v1/keg_readings`, {
+  const response = await fetch(`${url}/rest/v1/keg_scale_readings`, {
     method: 'POST',
     headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
-    body: JSON.stringify({ payload }),
+    body: JSON.stringify({ scale_id: scaleId, payload: { ...payload, scaleId } }),
   })
   if (!response.ok) return json({ error: 'Could not save reading' }, 502)
 
   const [reading] = await response.json()
   const pourOz = Number((payload as Record<string, unknown>).pourOz)
-  if (Number.isFinite(pourOz) && pourOz >= 1 && pourOz <= 64) {
-    const pourResponse = await fetch(`${url}/rest/v1/keg_pours`, {
+  if (isRecordedPour(pourOz)) {
+    const pourResponse = await fetch(`${url}/rest/v1/keg_scale_pours`, {
       method: 'POST',
       headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-      body: JSON.stringify({ reading_id: reading.id, ounces: pourOz, beer_oz_after: Number((payload as Record<string, unknown>).beerOz) || null }),
+      body: JSON.stringify({ scale_id: scaleId, reading_id: reading.id, ounces: pourOz, beer_oz_after: Number.isFinite(Number(payload.beerOz)) && payload.beerOz != null ? Number(payload.beerOz) : null }),
     })
     if (!pourResponse.ok) return json({ error: 'Reading saved, but pour event failed' }, 502)
   }
 
   const eventType = String((payload as Record<string, unknown>).eventType ?? '')
   if (eventType === 'freshKeg') {
-    const changeResponse = await fetch(`${url}/rest/v1/keg_changes`, {
+    const changeResponse = await fetch(`${url}/rest/v1/keg_scale_changes`, {
       method: 'POST',
       headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
       body: JSON.stringify({
-        reading_id: reading.id,
-        starting_ounces: Number((payload as Record<string, unknown>).beerOz) || null,
+        scale_id: scaleId, reading_id: reading.id,
+        starting_ounces: Number.isFinite(Number(payload.beerOz)) && payload.beerOz != null ? Number(payload.beerOz) : null,
         starting_percent: Number((payload as Record<string, unknown>).percent) || null,
       }),
     })
     if (!changeResponse.ok) return json({ error: 'Reading saved, but fresh-keg event failed' }, 502)
   }
 
-  return json({ ok: true, pourRecorded: Number.isFinite(pourOz) && pourOz >= 1 && pourOz <= 64, freshKegRecorded: eventType === 'freshKeg' }, 201)
+  return json({ ok: true, scaleId, pourRecorded: isRecordedPour(pourOz), freshKegRecorded: eventType === 'freshKeg' }, 201)
 })

@@ -3,7 +3,7 @@ import { supabase } from './supabase'
 
 const VAPID_PUBLIC_KEY = 'BKcR72BKoxWn8AvRkCy7dQB8GEFpskO6F1kPUqDK_vLbUv4VqWx_FCon62Xhir5RvdYWxSOcTupqy0uXd2KMjNQ'
 const DEFAULT_PREFERENCES = { fire: true, earthquake: true, weather: true, emergency: true, keg: true, padres: true }
-const PREFERENCE_LABELS = { fire: 'Nearby fires', earthquake: 'Noticeable earthquakes', weather: 'Weather & open-house alerts', emergency: 'County emergency notices', keg: 'Keg level & sensor', padres: 'San Diego sports start & final' }
+const PREFERENCE_LABELS = { fire: 'Nearby fires', earthquake: 'Noticeable earthquakes', weather: 'National Weather Service advisories & weather alerts', emergency: 'County emergency notices', keg: 'Keg level & sensor', padres: 'San Diego sports start & final' }
 
 function decodeKey(value) {
   const padding = '='.repeat((4 - value.length % 4) % 4)

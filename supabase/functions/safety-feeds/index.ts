@@ -7,12 +7,23 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+function weatherEventId(feature: any) {
+  const vtecValues = feature.properties?.parameters?.VTEC
+  const vtec = Array.isArray(vtecValues) ? vtecValues[0] : vtecValues
+  const match = typeof vtec === 'string'
+    ? vtec.match(/^\/([OTEX])\.[A-Z]{3}\.([A-Z]{4})\.([A-Z]{2})\.([A-Z])\.(\d{4})\.(\d{2})/)
+    : null
+  if (!match) return feature.id
+  const [, productClass, office, phenomenon, significance, trackingNumber, year] = match
+  return `${productClass}.${office}.${phenomenon}.${significance}.${trackingNumber}.${year}`
+}
+
 async function weatherAlerts() {
   const response = await fetch(`https://api.weather.gov/alerts/active?point=${HOME.lat},${HOME.lon}`, { headers: { 'User-Agent': 'ShepShackDashboard/1.0' } })
   if (!response.ok) throw new Error(`NWS ${response.status}`)
   const data = await response.json()
   return (data.features ?? []).map((feature: any) => ({
-    id: feature.id, event: feature.properties?.event, headline: feature.properties?.headline,
+    id: feature.id, notificationId: weatherEventId(feature), event: feature.properties?.event, headline: feature.properties?.headline,
     severity: feature.properties?.severity, urgency: feature.properties?.urgency,
     instruction: feature.properties?.instruction, description: feature.properties?.description,
     effective: feature.properties?.effective, expires: feature.properties?.expires,

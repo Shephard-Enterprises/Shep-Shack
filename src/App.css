@@ -1,33 +1,33 @@
 :root {
-  --bg: #071416;
-  --panel: rgba(13, 31, 34, 0.82);
-  --panel-raised: rgba(19, 43, 46, 0.94);
-  --border: rgba(120, 178, 181, 0.16);
-  --text: #f7f4ec;
-  --text-dim: #a8b9b8;
-  --text-faint: #698380;
+  --bg: #091326;
+  --panel: #122640;
+  --panel-raised: #183452;
+  --border: rgba(184, 205, 226, 0.2);
+  --text: #f7f6f0;
+  --text-dim: #becbd8;
+  --text-faint: #8298ad;
 
-  --accent: #ff7400;
-  --accent-dim: #713a15;
-  --teal: #087d89;
-  --teal-bright: #10a7b0;
+  --accent: #f4c558;
+  --accent-dim: #6d5122;
+  --teal: #d94b42;
+  --teal-bright: #f25a4d;
 
-  --status-good: #5dcaa5;
-  --status-good-dim: #1f3a32;
-  --status-alert: #e0584f;
-  --status-alert-dim: #3a2220;
-  --status-info: #5b9bd9;
-  --status-info-dim: #1f2e3a;
-  --status-sport: #8fbf52;
-  --status-sport-dim: #2a3520;
-  --status-keg: #d6b45f;
+  --status-good: #65e5ac;
+  --status-good-dim: #173b3c;
+  --status-alert: #ff647c;
+  --status-alert-dim: #48243d;
+  --status-info: #77b9dc;
+  --status-info-dim: #1b3151;
+  --status-sport: #f4c558;
+  --status-sport-dim: #413626;
+  --status-keg: #f4c558;
 
-  --font-display: ui-rounded, 'SF Pro Rounded', 'Avenir Next', system-ui, sans-serif;
-  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Arial Narrow', 'Avenir Next Condensed', Impact, sans-serif;
+  --font-body: 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
 
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
+  --radius-sm: 4px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
 }
 
 * {
@@ -40,9 +40,9 @@ body {
   color: var(--text);
   font-family: var(--font-body);
   background-image:
-    radial-gradient(circle at 12% 5%, rgba(8, 125, 137, 0.22), transparent 28rem),
-    radial-gradient(circle at 92% 18%, rgba(255, 116, 0, 0.09), transparent 25rem),
-    linear-gradient(180deg, #071416 0%, #09191b 48%, #061113 100%);
+    radial-gradient(ellipse at 50% -20%, rgba(44, 91, 137, .22), transparent 48rem),
+    repeating-linear-gradient(0deg, rgba(194, 207, 222, .018) 0 1px, transparent 1px 5px),
+    linear-gradient(145deg, #0d1b30 0%, #091326 65%, #11172a 100%);
   background-attachment: fixed;
 }
 
@@ -1116,6 +1116,25 @@ body {
   grid-template-columns: 1fr 72px 80px 90px;
 }
 
+.card h2.hotspotSummary {
+  font-size: 17px;
+}
+
+.hotspotLocation {
+  min-width: 0;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.hotspotLocation small {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-faint);
+  font-family: var(--font-body);
+  font-size: 9px;
+  font-weight: 400;
+}
+
 .incidentRow {
   grid-template-columns: 1fr 72px 70px 80px 120px;
 }
@@ -1266,7 +1285,17 @@ body {
   .flightRow { min-width: 580px; }
   .dailyRow { min-width: 620px; }
   .incidentRow { min-width: 600px; }
-  .fireRow { min-width: 430px; }
+  .fireRow { min-width: 0; }
+  .hotspotList { width: 100%; max-width: 100%; overflow-x: hidden; }
+  .fireRow.flightHeader { display: none; }
+  .fireRow:not(.flightHeader) { width: 100%; max-width: 100%; grid-template-columns: minmax(42px, 1fr) 46px 56px 62px; gap: 5px; padding: 12px 0; font-size: 11px; }
+  .fireRow:not(.flightHeader) > * { min-width: 0; overflow-wrap: anywhere; text-align: left; }
+  .fireRow:not(.flightHeader) .flightDistCol { text-align: left; }
+  .fireRow:not(.flightHeader) > *::before { display: block; margin-bottom: 3px; color: var(--text-faint); font-family: var(--font-body); font-size: 8px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+  .fireRow:not(.flightHeader) > *:nth-child(1)::before { content: 'Location'; }
+  .fireRow:not(.flightHeader) > *:nth-child(2)::before { content: 'Distance'; }
+  .fireRow:not(.flightHeader) > *:nth-child(3)::before { content: 'Heat output'; }
+  .fireRow:not(.flightHeader) > *:nth-child(4)::before { content: 'Confidence'; }
   .quakeRow { grid-template-columns: 50px minmax(0, 1fr); padding: 8px 0; }
   .quakeRow time { grid-column: 2; margin-top: -7px; }
   .officialAlert { grid-template-columns: 1fr; gap: 5px; }
@@ -1768,6 +1797,37 @@ body {
   white-space: nowrap;
 }
 
+.sportsScorers {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px 10px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.sportsScorers span {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.sportsScorers strong {
+  overflow: hidden;
+  color: var(--accent);
+  font-size: 12px;
+  text-align: right;
+  text-overflow: ellipsis;
+}
+
+.sportsScorers[href]:hover strong {
+  text-decoration: underline;
+}
+
 .sportsDetails {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -1797,6 +1857,800 @@ body {
   .soccerScore { gap: 6px; padding-inline: 8px; }
   .soccerScore > div { gap: 6px; }
   .soccerScore > div strong { font-size: 36px; }
+}
+
+/* 80s sports broadcast theme */
+.dashboard {
+  --panel: #122640;
+  --panel-raised: #183452;
+}
+
+.heroCard {
+  background:
+    linear-gradient(90deg, transparent 72%, rgba(242, 197, 88, .06)),
+    linear-gradient(112deg, #102846 0%, #19466d 58%, #142b49 100%);
+  border: 1px solid rgba(190, 210, 229, .22);
+  border-bottom: 3px solid var(--accent);
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .24), inset 0 1px rgba(255, 255, 255, .07);
+}
+
+.heroCard::after {
+  border-color: rgba(245, 211, 132, .12);
+  box-shadow: 0 0 0 50px rgba(245, 211, 132, .025), 0 0 0 100px rgba(255, 255, 255, .018);
+}
+
+.heroInfo h1 {
+  color: #fffaf0;
+  font-family: var(--font-display);
+  letter-spacing: .01em;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, .28);
+}
+
+.locationBadge,
+.systemStatus,
+.date {
+  color: #c3d0dc;
+}
+
+.weatherPill {
+  color: #f3eee2;
+  background: rgba(8, 21, 38, .55);
+  border: 1px solid rgba(244, 197, 88, .3);
+  border-radius: 4px;
+}
+
+.weatherPill span {
+  color: var(--accent);
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+
+.topNav {
+  background: rgba(14, 31, 52, .94);
+  border: 1px solid rgba(178, 201, 222, .16);
+  border-radius: 4px;
+  box-shadow: 0 5px 16px rgba(0, 0, 0, .2), inset 0 1px rgba(255, 255, 255, .035);
+  backdrop-filter: blur(12px);
+}
+
+.navButton {
+  color: #c3cfdb;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.navButton:hover {
+  color: #fffaf0;
+  border-color: rgba(244, 197, 88, .24);
+  background: rgba(244, 197, 88, .06);
+}
+
+.navButton.active {
+  color: #fffaf0;
+  background: #d7473f;
+  border-color: rgba(255, 255, 255, .18);
+  box-shadow: inset 0 -2px 0 var(--accent), 0 4px 12px rgba(0, 0, 0, .18);
+}
+
+.pageHeading h2 {
+  text-transform: uppercase;
+  letter-spacing: .045em;
+}
+
+.pageEyebrow {
+  color: #f1c75d;
+}
+
+.systemStatus {
+  color: #c7d3df;
+  background: rgba(16, 37, 61, .92);
+  border: 1px solid rgba(184, 205, 226, .2);
+  border-radius: 4px;
+}
+
+.homeGrid,
+.pageGrid {
+  background: linear-gradient(135deg, rgba(22, 43, 68, .78), rgba(14, 30, 50, .86));
+  border-block: 1px solid rgba(181, 202, 222, .2);
+  border-radius: 4px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .18), inset 0 1px rgba(255, 255, 255, .035);
+}
+
+.card,
+.needsAttention {
+  background: transparent;
+  border: 0;
+  border-top: 2px solid rgba(244, 197, 88, .72);
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.card:hover {
+  background: rgba(255, 255, 255, .025);
+  box-shadow: none;
+}
+
+.card.wideCard:hover {
+  background: transparent;
+}
+
+.card.accent-safety,
+.card.accent-sport {
+  border-top-color: var(--accent);
+}
+
+.soccerScore {
+  background:
+    repeating-linear-gradient(0deg, rgba(180, 205, 230, .025) 0 1px, transparent 1px 4px),
+    linear-gradient(110deg, #0b192b, #143252);
+  border: 1px solid rgba(244, 197, 88, .38);
+  border-radius: 3px;
+  box-shadow: inset 0 -2px 0 rgba(215, 71, 63, .8), inset 0 0 20px rgba(77, 142, 191, .08);
+}
+
+.soccerScore > div strong {
+  color: #fff5dc;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  text-shadow: 0 1px 10px rgba(244, 197, 88, .22);
+}
+
+.soccerScore > div span,
+.soccerScoreStatus {
+  color: #c0ccda;
+}
+
+.sportsScorers strong {
+  color: #f1c75d;
+}
+
+.notificationButton,
+.signOutButton {
+  color: var(--text-dim);
+  border-color: var(--border);
+  border-radius: 4px;
+}
+
+.notificationButton.enabled,
+.inboxHeader button {
+  color: var(--accent);
+}
+
+.notificationPanel,
+.notificationSettings,
+.moreMenu {
+  color: var(--text);
+  background: #122640;
+  border: 1px solid rgba(184, 205, 226, .24);
+  border-radius: 5px;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, .4);
+}
+
+.loginCard {
+  color: var(--text);
+  background: #122640;
+  border: 1px solid rgba(184, 205, 226, .24);
+  border-radius: 5px;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, .4);
+  backdrop-filter: none;
+}
+
+.loginForm input {
+  color: var(--text);
+  background: #09182a;
+  border: 1px solid rgba(184, 205, 226, .24);
+  border-radius: 3px;
+}
+
+.loginButton {
+  color: #fffaf0;
+  background: #d7473f;
+  border-radius: 3px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .2), inset 0 -2px 0 rgba(89, 25, 22, .28);
+}
+
+.textButton {
+  color: #f1c75d;
+}
+
+.sportsDetails {
+  background: rgba(7, 18, 31, .5);
+}
+
+.offlineBanner {
+  color: #ffd3c9;
+  background: rgba(117, 40, 39, .42);
+  border-color: rgba(242, 90, 77, .38);
+  border-radius: 4px;
+}
+
+@media (orientation: landscape) and (min-width: 1000px) and (max-height: 900px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .dashboard {
+    width: 100%;
+    height: 100svh;
+    min-height: 0;
+    max-height: 100svh;
+    padding: 10px 16px 12px;
+    gap: 7px;
+    overflow: hidden;
+  }
+
+  .heroCard {
+    flex: 0 0 70px;
+    min-height: 70px;
+    height: 70px;
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 12px;
+    padding: 5px 16px;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, .3), inset 0 1px rgba(255, 255, 255, .05);
+  }
+
+  .houseLogo {
+    width: 100px;
+    height: 58px;
+  }
+
+  .heroInfo {
+    display: grid;
+    grid-template-columns: auto auto auto auto;
+    align-items: center;
+    justify-self: end;
+    gap: 12px;
+  }
+
+  .heroInfo h1 {
+    font-size: 32px;
+  }
+
+  .locationBadge,
+  .systemStatus {
+    font-size: 9px;
+  }
+
+  .locationBadge,
+  .date {
+    margin: 0;
+  }
+
+  .date {
+    font-size: 11px;
+  }
+
+  .weatherPill {
+    padding: 5px 9px;
+    font-size: 10px;
+  }
+
+  .weatherPill span {
+    font-size: 13px;
+  }
+
+  .topNav {
+    flex: 0 0 42px;
+    min-height: 42px;
+    justify-content: flex-start;
+    gap: 4px;
+    padding: 3px 5px;
+    border-radius: 12px;
+    box-shadow: 0 5px 16px rgba(0, 0, 0, .24), inset 0 1px rgba(255, 255, 255, .035);
+  }
+
+  .navButton {
+    min-height: 32px;
+    padding: 5px 11px;
+    gap: 6px;
+    font-size: 11px;
+  }
+
+  .navIcon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .pageHeading {
+    flex: 0 0 38px;
+    min-height: 38px;
+    align-items: center;
+    padding: 0 2px;
+  }
+
+  .pageHeading h2 {
+    margin: 0;
+    font-size: 23px;
+  }
+
+  .pageEyebrow {
+    font-size: 8px;
+  }
+
+  .systemStatus {
+    padding: 5px 8px;
+  }
+
+  .notificationButton {
+    width: 30px;
+    height: 30px;
+  }
+
+  .dashboard > .homeGrid,
+  .dashboard > .pageGrid {
+    flex: 1 1 0;
+    min-height: 0;
+    align-content: stretch;
+    overflow: hidden;
+    gap: 8px;
+  }
+
+  .dashboard > .pageGrid > .card {
+    overflow: hidden;
+  }
+
+  .dashboard > .needsAttention {
+    flex: 0 0 auto;
+    max-height: 118px;
+    overflow: hidden;
+  }
+
+  .needsAttention .attentionHeading {
+    padding: 7px 10px 5px;
+  }
+
+  .needsAttention .attentionHeading h2 {
+    font-size: 15px;
+  }
+
+  .attentionList button {
+    min-height: 30px;
+    padding: 4px 10px;
+  }
+
+  .attentionList button:nth-child(n + 4) {
+    display: none;
+  }
+
+  .card,
+  .homeGrid .card {
+    min-width: 0;
+    min-height: 0;
+    padding: 11px 13px;
+    border-radius: 8px;
+    box-shadow: 0 5px 16px rgba(0, 0, 0, .22), inset 0 1px rgba(255, 255, 255, .035);
+  }
+
+  .card:hover {
+    transform: none;
+    box-shadow: 0 5px 16px rgba(0, 0, 0, .22), inset 0 1px rgba(255, 255, 255, .035);
+  }
+
+  .card h2,
+  .homeGrid .card h2 {
+    margin-bottom: 7px;
+    font-size: 16px;
+    line-height: 1.12;
+    letter-spacing: -.025em;
+  }
+
+  .cardLabel {
+    margin-bottom: 4px;
+    font-size: 9px;
+    letter-spacing: .14em;
+  }
+
+  .placeholderText {
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .statusRow {
+    gap: 7px;
+    padding: 5px 0;
+    font-size: 10px;
+  }
+
+  .statusRow {
+    border-top-color: rgba(121, 157, 197, .16);
+  }
+
+  .statusRow strong {
+    text-align: right;
+  }
+
+  .homeGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+
+  .homeGrid .card {
+    overflow: hidden;
+  }
+
+  .sportsPage {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: max-content;
+    grid-template-rows: 54px auto auto;
+    align-content: start;
+    align-items: start;
+  }
+
+  .dashboard > .sportsPage {
+    flex: 0 1 auto;
+  }
+
+  .sportsPage > .sportsIntro {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    min-height: 0;
+    padding: 6px 12px;
+  }
+
+  .sportsIntro h2 {
+    margin: 0 0 1px;
+    font-size: 17px;
+    line-height: 1;
+  }
+
+  .sportsIntro .cardLabel {
+    margin-bottom: 2px;
+    line-height: 1;
+  }
+
+  .sportsIntro .placeholderText {
+    font-size: 10px;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .soccerTeamHeader {
+    gap: 8px;
+  }
+
+  .sportsPage .soccerCard {
+    align-self: start;
+    padding: 12px 15px;
+    border-top-color: var(--teal);
+  }
+
+  .sportsPage .soccerCard h2 {
+    margin: 1px 0 0;
+    font-size: 18px;
+    line-height: 1.15;
+    letter-spacing: -.03em;
+  }
+
+  .soccerLogo {
+    width: 34px;
+    height: 34px;
+  }
+
+  .soccerScore {
+    margin: 9px 0 7px;
+    padding: 8px 10px;
+  }
+
+  .soccerScore > div strong {
+    font-size: 34px;
+  }
+
+  .soccerScore > div span,
+  .soccerScoreStatus,
+  .soccerNext span,
+  .soccerUpcoming span {
+    font-size: 9px;
+  }
+
+  .sportsScorers {
+    gap: 8px;
+    padding: 0 2px 4px;
+  }
+
+  .sportsPage .sportsScorers span {
+    font-size: 10px;
+  }
+
+  .sportsPage .sportsScorers strong,
+  .soccerUpcoming strong {
+    font-size: 12px;
+  }
+
+  .sportsPage .statusRow {
+    min-height: 0;
+    padding: 5px 0;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+
+  .sportsPage .statusRow strong {
+    font-size: 12px;
+  }
+
+  .sportsPage .soccerNext {
+    gap: 2px;
+    margin: 6px 0;
+  }
+
+  .sportsPage .soccerNext strong {
+    font-size: 17px;
+  }
+
+  .sportsPage .soccerUpcoming {
+    gap: 8px;
+    padding-top: 7px;
+    margin-top: 5px;
+  }
+
+  .weatherPage {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+
+  .weatherPage > .card.wideCard {
+    grid-column: auto;
+  }
+
+  .weatherPage .hourlyStrip {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    overflow: hidden;
+    margin-top: 5px;
+  }
+
+  .weatherPage .hourlyCell {
+    min-width: 0;
+    padding: 6px 2px;
+  }
+
+  .weatherPage .hourlyCell:nth-child(n + 7) {
+    display: none;
+  }
+
+  .weatherPage .hourlyDesc {
+    display: none;
+  }
+
+  .weatherPage .hourlyTemp {
+    font-size: 16px;
+  }
+
+  .weatherPage .flightRow.dailyRow {
+    min-height: 23px;
+    padding: 3px 4px;
+    font-size: 9px;
+  }
+
+  .weatherPage .fireMap.radarMap {
+    max-height: 118px;
+    aspect-ratio: 2.5 / 1;
+    margin-top: 5px;
+  }
+
+  .weatherPage .radarControls {
+    gap: 6px;
+    margin-top: 5px;
+  }
+
+  .weatherPage .radarNote {
+    display: none;
+  }
+
+  .safetyPage {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+
+  .safetyPage > .safetyAlertCard {
+    grid-column: span 2;
+  }
+
+  .safetyPage > .safetyFireSummary {
+    grid-column: span 1;
+  }
+
+  .safetyPage > .compactFireMapCard {
+    grid-column: span 3;
+  }
+
+  .safetyPage > .safetyIncidentList,
+  .safetyPage > .safetyHotspotList {
+    display: none;
+  }
+
+  .safetyPage > .safetyError {
+    grid-column: 1 / -1;
+    padding: 6px 10px;
+  }
+
+  .safetyPage .officialAlertList {
+    max-height: 52px;
+    overflow: hidden;
+  }
+
+  .safetyPage .officialAlert {
+    grid-template-columns: 1fr auto;
+    gap: 6px;
+    padding: 4px 0;
+    font-size: 9px;
+  }
+
+  .safetyPage .officialAlert span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .safetyPage .safetyVerdict {
+    margin: 4px 0;
+    font-size: 10px;
+  }
+
+  .safetyPage .quakeRow:nth-child(n + 4) {
+    display: none;
+  }
+
+  .safetyPage .fireMap {
+    max-height: 145px;
+    margin-top: 5px;
+  }
+
+  .safetyPage .fireMapLegend {
+    font-size: 8px;
+  }
+
+  .flightsPage {
+    grid-template-columns: minmax(0, 3fr) minmax(205px, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .flightsPage > .card.wideCard {
+    grid-column: auto;
+  }
+
+  .flightsPage .radarLayout {
+    grid-template-columns: minmax(150px, .8fr) minmax(0, 1.2fr);
+    gap: 10px;
+    margin-top: 7px;
+  }
+
+  .flightsPage .radarScope {
+    width: min(100%, 270px);
+  }
+
+  .flightsPage .radarDetails {
+    padding-left: 10px;
+  }
+
+  .flightsPage .radarDetails .statusRow {
+    padding: 4px 0;
+  }
+
+  .flightsPage .flightRow {
+    min-height: 24px;
+    padding: 3px 5px;
+    font-size: 9px;
+  }
+
+  .flightsPage .flightRow:nth-child(n + 5) {
+    display: none;
+  }
+
+  .kegPage {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+
+  .kegPage > .kegHero {
+    grid-column: span 2;
+  }
+
+  .kegPage > .card.wideCard {
+    grid-column: auto;
+  }
+
+  .kegPage .kegHeroBody {
+    grid-template-columns: 70px minmax(0, 1fr);
+    gap: 10px;
+    padding-top: 4px;
+  }
+
+  .kegPage .kegGauge {
+    gap: 5px;
+  }
+
+  .kegPage .kegGlass {
+    width: 42px;
+    border-top-width: 4px;
+    border-radius: 5px 5px 10px 10px;
+  }
+
+  .kegPage .kegGauge span {
+    font-size: 23px;
+  }
+
+  .kegPage .kegVerdict {
+    margin-bottom: 5px;
+    font-size: 15px;
+  }
+
+  .kegPage .kegPints {
+    gap: 5px;
+    margin-bottom: 4px;
+    font-size: 28px;
+  }
+
+  .kegPage .kegPints span {
+    font-size: 8px;
+  }
+
+  .kegPage .kegReadout .placeholderText {
+    font-size: 9px;
+  }
+
+  .kegPage .kegChart {
+    height: 86px;
+    min-height: 0;
+  }
+
+  .kegPage .drinkingWeek {
+    height: 90px;
+  }
+
+  .kegPage .drinkingHighlights {
+    gap: 8px;
+    margin: 4px 0 8px;
+  }
+
+  .kegPage .drinkingHighlights > div {
+    gap: 2px;
+    padding: 6px;
+  }
+
+  .kegPage .drinkingHighlights span,
+  .kegPage .drinkingHighlights small {
+    font-size: 8px;
+  }
+
+  .kegPage .drinkingHighlights strong {
+    font-size: 16px;
+  }
+
+  .kegPage .drinkingWeek {
+    min-height: 0;
+    height: 58px;
+    padding: 4px;
+    gap: 4px;
+  }
+
+  .kegPage .drinkingDay {
+    grid-template-rows: 12px 1fr 12px;
+    gap: 2px;
+  }
+
+  .kegPage .drinkingBarTrack {
+    min-height: 0;
+  }
+
+  .kegPage .statusRow:nth-of-type(n + 5) {
+    display: none;
+  }
+
+  .housePage {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+
+  .housePage > .card.wideCard {
+    grid-column: auto;
+  }
 }
 
 /* ---------- Weather ---------- */
@@ -1878,5 +2732,75 @@ body {
   .heroInfo {
     text-align: right;
     margin-left: 0;
+  }
+}
+
+.homeGrid,
+.pageGrid {
+  gap: 0;
+  overflow: hidden;
+}
+
+.homeGrid > .card,
+.pageGrid > .card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.homeGrid > .card:not(:nth-child(3n)),
+.pageGrid > .card:not(.wideCard) {
+  border-right: 1px solid rgba(184, 205, 226, .18);
+}
+
+.homeGrid > .card:nth-child(-n + 3) {
+  border-bottom: 1px solid rgba(184, 205, 226, .18);
+}
+
+.sportsPage > .sportsIntro {
+  border-bottom: 2px solid rgba(244, 197, 88, .72);
+}
+
+.sportsPage > .soccerCard {
+  border-top: 0;
+}
+
+.sportsPage > .soccerCard .soccerScore {
+  border-radius: 2px;
+}
+
+.pageGrid > .card:hover {
+  background: rgba(255, 255, 255, .025);
+  box-shadow: none;
+}
+
+.pageGrid > .wideCard:hover {
+  background: transparent;
+}
+
+@media (orientation: landscape) and (min-width: 1000px) and (max-height: 900px) {
+  .topNav {
+    border-radius: 3px;
+    box-shadow: none;
+  }
+
+  .homeGrid,
+  .pageGrid {
+    border-radius: 3px;
+    box-shadow: none;
+  }
+
+  .homeGrid > .card,
+  .pageGrid > .card {
+    padding: 11px 13px;
+  }
+
+  .sportsPage > .sportsIntro {
+    padding: 6px 12px;
+  }
+
+  .sportsPage > .soccerCard {
+    border-right: 1px solid rgba(184, 205, 226, .18);
   }
 }

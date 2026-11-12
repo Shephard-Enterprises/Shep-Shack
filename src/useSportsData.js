@@ -51,11 +51,11 @@ export function usePadres({ enabled = true, intervalMs = 60_000, refreshKey = 0 
           setGame(null)
         }
 
-        const weekAgo = new Date()
-        weekAgo.setDate(weekAgo.getDate() - 7)
+        const recentStart = new Date()
+        recentStart.setFullYear(recentStart.getFullYear() - 1)
         const yesterday = new Date()
         yesterday.setDate(yesterday.getDate() - 1)
-        const recentResponse = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=135&startDate=${localDateStr(weekAgo)}&endDate=${localDateStr(yesterday)}`)
+        const recentResponse = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=135&startDate=${localDateStr(recentStart)}&endDate=${localDateStr(yesterday)}`)
         if (recentResponse.ok) {
           const recent = await recentResponse.json()
           if (cancelled) return
@@ -150,7 +150,7 @@ export function usePadres({ enabled = true, intervalMs = 60_000, refreshKey = 0 
   return { game, latestGame, nextGame, standing, loading, error, lastUpdated }
 }
 
-export function useSoccerScores({ enabled = true, intervalMs = 60_000, refreshKey = 0 } = {}) {
+export function useSportsScores({ enabled = true, intervalMs = 60_000, refreshKey = 0 } = {}) {
   const [teams, setTeams] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

@@ -2,12 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import './App.css'
+import './Retro.css'
+import { RetroHeader, RetroHome, RetroFlights, RetroKegGauge, RetroSports } from './RetroUI'
+import ScreenDeck, { PagedItems } from './ScreenDeck'
+import { kegLevel } from './retro-model.mjs'
 import { supabase } from './supabase'
 import { useFireWatch } from './useFireWatch'
 import { useFlights } from './useFlights'
 import { useKegStatus } from './useKegStatus'
 import { useNetworkStatus } from './useNetworkStatus'
-import { usePadres, useSoccerScores } from './useSportsData'
+import { usePadres, useSportsScores } from './useSportsData'
 import { useWeather } from './useWeather'
 import NotificationControl from './NotificationControl'
 
@@ -17,17 +21,6 @@ const RADIUS_MI = 5
 const TIME_ZONE = 'America/Los_Angeles'
 
 // --- Helpers ---
-
-function degToCompass(deg) {
-  if (deg == null) return '—'
-  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
-  return dirs[Math.round(deg / 45) % 8]
-}
-
-function formatAlt(alt) {
-  if (alt == null || alt === 'ground') return '—'
-  return `${(Math.round(alt / 100) * 100).toLocaleString()} ft`
-}
 
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371
@@ -211,7 +204,7 @@ function useSafetyData({ enabled = true, intervalMs = 10 * 60_000, refreshKey = 
   return { airQuality, earthquakes, weatherAlerts, countyEmergencies, loading, error, lastUpdated }
 }
 
-const FIRE_INCIDENT_RADIUS_MI = 30
+const FIRE_INCIDENT_RADIUS_MI = 25
 const FIRE_INCIDENT_MIN_ACRES = 5
 
 function formatUvIndex(value) {
@@ -237,11 +230,6 @@ function Freshness({ date, staleAfterMinutes = 10 }) {
   const stale = minutes >= staleAfterMinutes
   return <span className={`freshness ${stale ? 'stale' : ''}`}><span className={`statusDot ${stale ? 'alert' : 'good'}`} />{minutes < 1 ? 'Just updated' : `${minutes}m ago`}</span>
 }
-
-const SOCCER_TEAMS = [
-  { key: 'wave', name: 'San Diego Wave', shortName: 'Wave', league: 'NWSL', leagueSlug: 'usa.nwsl', teamId: '21423' },
-  { key: 'sdfc', name: 'San Diego FC', shortName: 'SDFC', league: 'MLS', leagueSlug: 'usa.1', teamId: '22529' },
-]
 
 // --- App shell ---
 
@@ -393,6 +381,7 @@ function Dashboard({ session }) {
     const requested = requestedPage === 'padres' ? 'sports' : requestedPage
     return pages.some(page => page.id === requested) ? requested : 'home'
   })
+  const [selectedScale, setSelectedScale] = useState(() => new URLSearchParams(window.location.search).get('scale') === 'sparkling-water' ? 'sparkling-water' : 'beer')
   const [moreOpen, setMoreOpen] = useState(false)
   const network = useNetworkStatus()
   const onHome = activePage === 'home'
@@ -401,8 +390,10 @@ function Dashboard({ session }) {
   const fireData = useFireWatch({ enabled: onHome || activePage === 'fire', intervalMs: onHome ? 10 * 60_000 : 5 * 60_000, refreshKey })
   const safetyData = useSafetyData({ enabled: onHome || activePage === 'fire', intervalMs: 10 * 60_000, refreshKey })
   const padresData = usePadres({ enabled: onHome || activePage === 'sports', intervalMs: onHome ? 10 * 60_000 : 60_000, refreshKey })
-  const soccerData = useSoccerScores({ enabled: onHome || activePage === 'sports', intervalMs: onHome ? 10 * 60_000 : 60_000, refreshKey })
-  const kegData = useKegStatus({ enabled: onHome || activePage === 'keg', includeHistory: activePage === 'keg', intervalMs: onHome ? 60_000 : 30_000, refreshKey })
+  const sportsData = useSportsScores({ enabled: onHome || activePage === 'sports', intervalMs: onHome ? 10 * 60_000 : 60_000, refreshKey })
+  const kegData = useKegStatus({ scaleId: 'beer', enabled: onHome || activePage === 'keg', includeHistory: activePage === 'keg', intervalMs: onHome ? 60_000 : 30_000, refreshKey })
+
+  const waterKegData = useKegStatus({ scaleId: 'sparkling-water', enabled: onHome || activePage === 'keg', includeHistory: activePage === 'keg', intervalMs: onHome ? 60_000 : 30_000, refreshKey })
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 30_000)
@@ -427,6 +418,7 @@ function Dashboard({ session }) {
 
   useEffect(() => {
     const startPull = event => {
+      if (event.target.closest?.('button,input,select,a,dialog,.leaflet-container,.screen-paged-items')) return
       if (window.scrollY <= 0 && event.touches.length === 1) pullStart.current = event.touches[0].clientY
     }
     const movePull = event => {
@@ -465,38 +457,34 @@ function Dashboard({ session }) {
     }
   }, [])
 
-  const currentTime = time.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-  const currentDate = time.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })
+  function navigate(page, scaleId) {
+    if (!pages.some(item=>item.id===page)) return
+    setActivePage(page); setMoreOpen(false)
+    const url=new URL(window.location.href); url.searchParams.set('page',page)
+    if (scaleId) { setSelectedScale(scaleId); url.searchParams.set('scale',scaleId) }
+    window.history.pushState({page},'',url)
+    window.scrollTo({top:0,behavior:'instant'})
+  }
+  useEffect(()=>{
+    const restore=()=>{const params=new URLSearchParams(window.location.search);setSelectedScale(params.get('scale')==='sparkling-water'?'sparkling-water':'beer');const page=params.get('page');setActivePage(pages.some(item=>item.id===page)?page:'home')}
+    window.addEventListener('popstate',restore)
+    return ()=>window.removeEventListener('popstate',restore)
+  },[])
   const { weather } = weatherData
 
   return (
-    <main className="dashboard">
+    <main className={`dashboard retro-app retro-page-${activePage}`} style={{'--retro-scene': `url(${import.meta.env.BASE_URL}retro/coastal-sunset.jpg)`}}>
       <div className={`pullRefresh ${pullDistance > 0 ? 'visible' : ''} ${pullDistance >= 68 || refreshing ? 'ready' : ''} ${refreshing ? 'refreshing' : ''}`} style={{ '--pull-distance': `${pullDistance}px` }} aria-hidden="true">
         <span>↻</span><strong>{refreshing ? 'Refreshing…' : pullDistance >= 68 ? 'Release to refresh' : 'Pull to refresh'}</strong>
       </div>
-      <section className={`heroCard ${headerCompact ? 'compact' : ''}`} aria-label="Current time and weather">
-        <div className="logoPanel">
-          <img src={`${import.meta.env.BASE_URL}shepshack.png`} alt="Shep Shack logo" className="houseLogo" />
-        </div>
-
-        <div className="heroInfo">
-          <div className="locationBadge"><span className="liveDot" />Santee, California</div>
-          <h1>{currentTime}</h1>
-          <p className="date">{currentDate}</p>
-
-          <div className="weatherPill">
-            <span>{weather ? `${weather.temp}°` : '—'}</span>
-            <p style={{ margin: 0 }}>{weather ? weather.description : 'Santee, CA'}</p>
-          </div>
-        </div>
-      </section>
+      <RetroHeader now={time} activePage={activePage} title={activePage==='flights'?'Flight Radar':activePage==='keg'?'On Tap':pages.find(page=>page.id===activePage)?.label} weather={weather} compact={headerCompact} navigate={navigate} />
 
       <nav className="topNav">
         {pages.map(page => (
           <button
             key={page.id}
             className={`navButton ${page.id === 'house' ? 'secondaryNav' : ''} ${activePage === page.id ? 'active' : ''}`}
-            onClick={() => { setActivePage(page.id); setMoreOpen(false) }}
+            onClick={() => navigate(page.id)}
             aria-current={activePage === page.id ? 'page' : undefined}
           >
             <NavIcon name={page.icon} />
@@ -510,386 +498,94 @@ function Dashboard({ session }) {
       {moreOpen && (
         <div className="moreMenu">
           {pages.filter(page => page.id === 'house').map(page => (
-            <button key={page.id} type="button" onClick={() => { setActivePage(page.id); setMoreOpen(false) }}><NavIcon name={page.icon} />{page.label}</button>
+            <button key={page.id} type="button" onClick={() => navigate(page.id)}><NavIcon name={page.icon} />{page.label}</button>
           ))}
         </div>
       )}
 
       {!network.online && <div className="offlineBanner" role="status"><span className="statusDot alert" />Offline · showing the last available readings</div>}
 
-      <header className="pageHeading">
+      <header className="pageHeading retro-page-heading">
         <div>
           <p className="pageEyebrow">Shep Shack command center</p>
           <h2>{pages.find(page => page.id === activePage)?.label}</h2>
         </div>
         <div className="headerActions">
-          <div className="systemStatus"><span className="liveDot" />Live data</div>
-          <NotificationControl userId={session.user.id} onOpenSettings={() => setActivePage('house')} />
+          <div className="systemStatus"><span className="liveDot" />{!network.online ? 'Offline' : [flightData,weatherData,fireData,safetyData,padresData,sportsData,kegData,waterKegData].some(feed=>feed.error) ? 'Some feeds unavailable' : 'Connected'}</div><button type="button" className="retro-refresh" onClick={()=>setRefreshKey(key=>key+1)} aria-label="Refresh dashboard readings">↻</button>
+          <NotificationControl userId={session.user.id} onOpenSettings={() => navigate('house')} />
         </div>
       </header>
 
+      <div className="retro-screen-content">
       {activePage === 'home' && (
-        <HomePage now={time} onNavigate={setActivePage} flightData={flightData} fireData={fireData} safetyData={safetyData} padresData={padresData} soccerData={soccerData} weatherData={weatherData} kegData={kegData} />
+        <HomePage now={time} onNavigate={navigate} flightData={flightData} fireData={fireData} safetyData={safetyData} padresData={padresData} sportsData={sportsData} weatherData={weatherData} kegData={kegData} waterKegData={waterKegData} />
       )}
       {activePage === 'weather' && <WeatherPage weatherData={weatherData} />}
       {activePage === 'fire' && <SafetyPage fireData={fireData} safetyData={safetyData} />}
       {activePage === 'flights' && <FlightsPage flightData={flightData} />}
-      {activePage === 'sports' && <SportsPage padresData={padresData} soccerData={soccerData} />}
-      {activePage === 'keg' && <KegPage kegData={kegData} />}
+      {activePage === 'sports' && <SportsPage padresData={padresData} sportsData={sportsData} />}
+      {activePage === 'keg' && <><div className="keg-scale-selector" role="group" aria-label="Select tap"><button aria-pressed={selectedScale==='sparkling-water'} onClick={()=>navigate('keg','sparkling-water')}>Sparkling Water</button><button aria-pressed={selectedScale==='beer'} onClick={()=>navigate('keg','beer')}>Beer</button></div><KegPage key={selectedScale} kegData={selectedScale==='beer'?kegData:waterKegData} /></>}
       {activePage === 'house' && <HousePage session={session} />}
+      </div>
     </main>
   )
 }
 
 // --- Pages ---
 
-function HomePage({ now, onNavigate, flightData, fireData, safetyData, padresData, soccerData, weatherData, kegData }) {
-  const { flights, loading: flightsLoading } = flightData
-  const { incidents, fires, loading: fireLoading } = fireData
-  const { game, nextGame, loading: padresLoading } = padresData
-  const { teams: soccerTeams, loading: soccerLoading } = soccerData
-  const { weather, loading: weatherLoading } = weatherData
-  const { keg, loading: kegLoading, error: kegError } = kegData
-  const closest = flights[0]
-  const flightCount = flights.length
-  const nearestFire = incidents[0] ?? fires[0]
-  const aqiCategory = getAqiCategory(safetyData.airQuality?.aqi)
-  const recentQuake = safetyData.earthquakes.find(quake => quake.time && now.getTime() - quake.time.getTime() < 24 * 60 * 60 * 1000)
-  const kegStale = kegData.lastUpdated && now.getTime() - kegData.lastUpdated.getTime() > 10 * 60 * 1000
-  const attentionItems = [
-    ...safetyData.countyEmergencies.slice(0, 1).map(notice => ({ title: notice.type, detail: notice.label || notice.notes || 'Official County notice affects home', page: 'fire', tone: 'alert' })),
-    ...safetyData.weatherAlerts.slice(0, 1).map(alert => ({ title: alert.event, detail: alert.headline || 'Weather warning affects home', page: 'fire', tone: 'alert' })),
-    ...(incidents[0] ? [{ title: 'Wildfire nearby', detail: `${incidents[0].name} · ${incidents[0].distMi.toFixed(0)} miles away`, page: 'fire', tone: 'alert' }] : []),
-    ...(safetyData.airQuality?.aqi > 100 ? [{ title: 'Poor air quality', detail: `AQI ${Math.round(safetyData.airQuality.aqi)} · ${aqiCategory.label}`, page: 'fire', tone: 'alert' }] : []),
-    ...(recentQuake ? [{ title: `M ${recentQuake.magnitude.toFixed(1)} earthquake`, detail: `${recentQuake.distMi.toFixed(0)} miles away`, page: 'fire', tone: 'info' }] : []),
-    ...(kegError || kegStale ? [{ title: 'Keg monitor offline', detail: kegStale ? 'No fresh reading for over 10 minutes' : 'Sensor data unavailable', page: 'keg', tone: 'alert' }] : []),
-    ...(!kegError && !kegStale && keg?.percent <= 20 ? [{ title: 'Keg is running low', detail: `${Math.round(keg.percent)}% remaining`, page: 'keg', tone: 'info' }] : []),
-  ]
-
-  return (
-    <>
-    {attentionItems.length > 0 && <section className="needsAttention" aria-labelledby="attention-title">
-      <div className="attentionHeading"><div><p className="cardLabel">Live priorities</p><h2 id="attention-title">Needs attention</h2></div><span>{attentionItems.length}</span></div>
-      <div className="attentionList">{attentionItems.map((item, index) => <button type="button" onClick={() => onNavigate(item.page)} key={`${item.title}-${index}`}><span className={`statusDot ${item.tone}`} /><span><strong>{item.title}</strong><small>{item.detail}</small></span><b aria-hidden="true">›</b></button>)}</div>
-    </section>}
-    <section className="grid homeGrid">
-      <div className="card accent-fire homePriority" onClick={() => onNavigate('fire')}>
-        <p className="cardLabel">Safety</p>
-        <h2>
-          {fireLoading
-            ? 'Loading…'
-            : incidents.length > 0
-            ? `${incidents.length} active incident${incidents.length > 1 ? 's' : ''} nearby`
-            : fires.length > 0
-            ? `${fires.length} satellite hotspot${fires.length > 1 ? 's' : ''}`
-            : safetyData.airQuality?.aqi > 100
-            ? `Air quality: ${aqiCategory.label}`
-            : 'All clear'}
-        </h2>
-        <div className="statusRow">
-          <span>Nearest signal</span>
-          <strong>
-            <span className={`statusDot ${nearestFire ? 'alert' : 'good'}`} />
-            {fireLoading ? '—' : nearestFire ? `${nearestFire.distMi.toFixed(0)} mi` : 'None'}
-          </strong>
-        </div>
-        <div className="statusRow">
-          <span>Air quality</span>
-          <strong>
-            <span className={`statusDot ${aqiCategory.tone}`} />
-            {safetyData.loading ? '—' : safetyData.airQuality?.aqi != null ? `AQI ${Math.round(safetyData.airQuality.aqi)}` : 'Unavailable'}
-          </strong>
-        </div>
-      </div>
-
-      <div className="card accent-flights homeSecondary" onClick={() => onNavigate('flights')}>
-        <p className="cardLabel">Flights</p>
-        <h2>
-          {flightsLoading
-            ? 'Loading…'
-            : flightCount === 0
-            ? 'Clear skies'
-            : `${flightCount} overhead`}
-        </h2>
-        <div className="statusRow">
-          <span>Within {RADIUS_MI} mi</span>
-          <strong>
-            <span className={`statusDot ${flightCount > 0 ? 'info' : 'good'}`} />
-            {flightsLoading ? '—' : flightCount}
-          </strong>
-        </div>
-        <div className="statusRow">
-          <span>Closest</span>
-          <strong>
-            {flightsLoading || !closest
-              ? '—'
-              : `${(closest.flight?.trim() || closest.hex).toUpperCase()} · ${(closest.dst * 1.15078).toFixed(1)} mi`}
-          </strong>
-        </div>
-      </div>
-
-      <div className="card accent-sport homeSecondary" onClick={() => onNavigate('sports')}>
-        <p className="cardLabel">San Diego sports</p>
-        <h2>
-          {padresLoading
-            ? 'Loading…'
-            : game?.state === 'Live'
-            ? `SD ${game.padresScore} · ${teamAbbr(game.opponent)} ${game.opponentScore}`
-            : game?.state === 'Final'
-            ? `Final · SD ${game.padresScore}–${game.opponentScore}`
-            : game?.state === 'Preview'
-            ? `vs ${teamAbbr(game.opponent)}`
-            : nextGame
-            ? `Next: vs ${teamAbbr(nextGame.opponent)}`
-            : 'Off day'}
-        </h2>
-        <div className="statusRow">
-          <span>Padres</span>
-          <strong>
-            <span className={`statusDot ${game?.state === 'Live' ? 'alert' : game ? 'info' : 'neutral'}`} />
-            {padresLoading ? '—' : game ? game.detailedState : nextGame ? new Date(nextGame.gameDate).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) : 'No game'}
-          </strong>
-        </div>
-        {soccerLoading && <div className="statusRow"><span>Soccer</span><strong>Loading…</strong></div>}
-        {!soccerLoading && soccerTeams.map(team => {
-          const event = team.live ?? team.latest ?? team.next
-          const summary = team.live || team.latest
-            ? `${event.score}–${event.opponentScore} ${event.opponentAbbr}`
-            : event ? `${event.home ? 'vs' : '@'} ${event.opponentAbbr}` : 'No match'
-          return <div className="statusRow" key={team.key}><span>{team.shortName}</span><strong><span className={`statusDot ${team.live ? 'alert' : 'info'}`} />{summary}</strong></div>
-        })}
-      </div>
-
-      <div className="card accent-weather homePriority homeWeather" onClick={() => onNavigate('weather')}>
-        <p className="cardLabel">Weather</p>
-        <h2>
-          {weatherLoading ? 'Loading…' : weather ? `${weather.temp}° — ${weather.description}` : 'Unavailable'}
-        </h2>
-        <div className="statusRow">
-          <span>Wind</span>
-          <strong>{weatherLoading || !weather ? '—' : `${weather.windSpeed} ${weather.windDirection}`}</strong>
-        </div>
-        <div className="statusRow">
-          <span>Humidity</span>
-          <strong>{weatherLoading || !weather || weather.humidity == null ? '—' : `${weather.humidity}%`}</strong>
-        </div>
-        <div className="statusRow">
-          <span>UV index</span>
-          <strong>
-            {weatherLoading || !weather || weather.uvIndex == null
-              ? '—'
-              : weather.uvIndexMax != null
-              ? `${formatUvIndex(weather.uvIndex)} · max ${Math.round(weather.uvIndexMax * 10) / 10}`
-              : formatUvIndex(weather.uvIndex)}
-          </strong>
-        </div>
-      </div>
-
-      <div className="card accent-house" onClick={() => onNavigate('house')}>
-        <p className="cardLabel">Home</p>
-        <h2>Network status</h2>
-        <div className="statusRow">
-          <span>Network</span>
-          <strong><span className="statusDot info" />Available</strong>
-        </div>
-        <div className="statusRow">
-          <span>Speed test</span>
-          <strong><span className="statusDot neutral" />Manual</strong>
-        </div>
-        <div className="statusRow">
-          <span>Dashboard</span>
-          <strong><span className="statusDot info" />Online</strong>
-        </div>
-      </div>
-
-      <div className="card accent-keg homePriority homeKeg" onClick={() => onNavigate('keg')}>
-        <p className="cardLabel">Keg</p>
-        <h2>
-          {kegLoading
-            ? 'Loading…'
-            : kegError
-            ? 'Unavailable'
-            : keg
-            ? `${Math.round(keg.percent ?? 0)}% full`
-            : 'Unknown'}
-        </h2>
-        <div className="statusRow">
-          <span>Tap</span>
-          <strong>
-            <span className={`statusDot ${keg?.ready ? 'good' : kegError ? 'alert' : 'neutral'}`} />
-            {kegLoading ? '—' : keg?.ready ? 'Ready' : kegError ? 'Offline' : 'Unknown'}
-          </strong>
-        </div>
-        <div className="statusRow">
-          <span>Pints left</span>
-          <strong>{keg?.pintsLeft != null ? keg.pintsLeft.toFixed(1) : '—'}</strong>
-        </div>
-      </div>
-    </section>
-    </>
-  )
-}
+function HomePage(props) { return <RetroHome {...props} aircraftName={aircraftName} flightDistanceMi={flightDistanceMi} /> }
 
 function SafetyPage({ fireData, safetyData }) {
   const { incidents, fires, error, loading, lastUpdated } = fireData
   const { airQuality, earthquakes, weatherAlerts, countyEmergencies, loading: safetyLoading, error: safetyError, lastUpdated: safetyUpdated } = safetyData
-  const signalCount = incidents.length + fires.length
-  const aqiCategory = getAqiCategory(airQuality?.aqi)
+  const notices = [...countyEmergencies, ...weatherAlerts]
+  const category = getAqiCategory(airQuality?.aqi)
+  const [detail, setDetail] = useState(null)
+  const detailDialog = useRef(null)
+  const openDetail = (kind, data) => { setDetail({ kind, data }); detailDialog.current.showModal() }
+  const distance = value => Number.isFinite(value) ? `${Math.round(value)} mi` : '—'
+  const acres = value => Number.isFinite(value) ? `${Math.round(value).toLocaleString()} acres` : 'Acres unavailable'
+  const updated = value => value ? new Date(value).toLocaleString('en-US', { timeZone: TIME_ZONE, month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : 'Not supplied'
 
-  function formatIncidentTime(ms) {
-    if (!ms) return '—'
-    return new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-  }
-
-  function formatAcres(acres) {
-    if (acres == null) return '—'
-    if (acres < 1) return '<1'
-    return Math.round(acres).toLocaleString()
-  }
-
-  return (
-    <section className="pageGrid">
-      <div className={`card wideCard safetyAlertCard ${weatherAlerts.length || countyEmergencies.length ? 'active' : ''}`}>
-        <div className="cardHeaderRow">
-          <div>
-            <p className="cardLabel">Official alerts for the house</p>
-            <h2>{safetyLoading ? 'Checking…' : weatherAlerts.length || countyEmergencies.length ? `${weatherAlerts.length + countyEmergencies.length} active notice${weatherAlerts.length + countyEmergencies.length > 1 ? 's' : ''}` : 'No active warnings'}</h2>
-          </div>
-          <span className="dataSource">NWS · County OES</span>
-        </div>
-        {!safetyLoading && weatherAlerts.length === 0 && countyEmergencies.length === 0 && <p className="safetyVerdict"><span className="statusDot good" />Nothing currently affects the home location.</p>}
-        <div className="officialAlertList">
-          {countyEmergencies.map(notice => <article className="officialAlert emergency" key={`county-${notice.id}`}><strong>{notice.type}</strong><span>{notice.label || notice.notes || 'San Diego County emergency notice'}</span></article>)}
-          {weatherAlerts.map(alert => <a className="officialAlert weather" href={alert.url} target="_blank" rel="noreferrer" key={alert.id}><strong>{alert.event}</strong><span>{alert.headline || alert.description}</span><time>{alert.expires ? `Until ${new Date(alert.expires).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : alert.severity}</time></a>)}
-        </div>
-      </div>
-
-      <div className="card safetyMetric accent-air">
-        <div className="cardHeaderRow">
-          <div>
-            <p className="cardLabel">Air quality · Santee</p>
-            <h2>{safetyLoading ? 'Loading…' : airQuality?.aqi != null ? `${Math.round(airQuality.aqi)} AQI` : 'Unavailable'}</h2>
-          </div>
-          {safetyUpdated && <Freshness date={safetyUpdated} />}
-        </div>
-        <p className="safetyVerdict"><span className={`statusDot ${aqiCategory.tone}`} />{aqiCategory.label}</p>
-        <div className="statusRow"><span>Fine particles (PM2.5)</span><strong>{airQuality?.pm25 != null ? `${Math.round(airQuality.pm25)} µg/m³` : '—'}</strong></div>
-        <div className="statusRow"><span>Ozone</span><strong>{airQuality?.ozone != null ? `${Math.round(airQuality.ozone)} µg/m³` : '—'}</strong></div>
-      </div>
-
-      <div className="card safetyMetric accent-quake">
-        <div className="cardHeaderRow">
-          <div>
-            <p className="cardLabel">Potentially noticeable earthquakes · past 7 days</p>
-            <h2>{safetyLoading ? 'Loading…' : earthquakes.length ? `${earthquakes.length} detected` : 'No recent earthquakes'}</h2>
-          </div>
-          <span className="dataSource">USGS</span>
-        </div>
-        {earthquakes.length > 0 ? (
-          <div className="quakeList">
-            {earthquakes.slice(0, 5).map(quake => (
-              <a className="quakeRow" href={quake.url} target="_blank" rel="noreferrer" key={quake.id}>
-                <strong>M {quake.magnitude?.toFixed(1) ?? '—'}</strong>
-                <span>{quake.distMi.toFixed(0)} mi away · {quake.place ?? 'Southern California'}</span>
-                <time>{quake.time?.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</time>
-              </a>
-            ))}
-          </div>
-        ) : !safetyLoading && <p className="placeholderText">No earthquakes likely to be felt in Santee were reported nearby.</p>}
-      </div>
-
-      {safetyError && <div className="card wideCard safetyError" role="status">Safety data is temporarily unavailable: {safetyError}</div>}
-
-      <div className="card wideCard accent-fire">
-        <div className="cardHeaderRow">
-          <div>
-            <p className="cardLabel">Within {FIRE_INCIDENT_RADIUS_MI} miles of Santee</p>
-            <h2>
-              {loading ? 'Loading…'
-                : signalCount === 0 ? 'All clear nearby'
-                : incidents.length > 0
-                ? `${incidents.length} active wildfire incident${incidents.length > 1 ? 's' : ''}`
-                : `${fires.length} satellite heat detection${fires.length > 1 ? 's' : ''}`}
-            </h2>
-            {!loading && signalCount > 0 && incidents.length === 0 && (
-              <p className="placeholderText" style={{ marginTop: 8 }}>
-                NASA heat detections are signals, not confirmed wildfire boundaries.
-              </p>
-            )}
-          </div>
-          {lastUpdated && (
-            <Freshness date={lastUpdated} />
-          )}
-        </div>
-
-        {error && (
-          <p style={{ color: 'var(--status-alert)', fontSize: 13, marginTop: 8 }}>{error}</p>
-        )}
-      </div>
-
-      <FireMap incidents={incidents} fires={fires} loading={loading} />
-
-      {incidents.length > 0 && <div className="card wideCard accent-fire">
-        <p className="cardLabel">
-          Active incidents — WFIGS current · {FIRE_INCIDENT_MIN_ACRES}+ acres · within {FIRE_INCIDENT_RADIUS_MI} mi
-        </p>
-        <h2>
-          {loading ? 'Loading…'
-            : incidents.length === 0 ? 'No named incidents nearby'
-            : `${incidents.length} active incident${incidents.length > 1 ? 's' : ''} nearby`}
-        </h2>
-        {incidents.length > 0 && (
-          <div className="flightList">
-            <div className="flightRow incidentRow flightHeader">
-              <span>Incident</span>
-              <span className="flightDistCol">Distance</span>
-              <span>Acres</span>
-              <span>Contained</span>
-              <span>Updated</span>
-            </div>
-            {incidents.map((incident, i) => (
-              <div key={`${incident.name}-${i}`} className="flightRow incidentRow">
-                <span>
-                  <span className="flightIdent" style={{ fontSize: 13 }}>{incident.name}</span>
-                  <span className="flightType">{incident.county ? `${incident.county} County` : 'California'}</span>
-                </span>
-                <span className="flightDistCol flightDist">{incident.distMi.toFixed(0)} mi</span>
-                <span>{formatAcres(incident.acres)}</span>
-                <span>{incident.containment != null ? `${incident.containment}%` : '—'}</span>
-                <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>{formatIncidentTime(incident.updated)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>}
-
-      {fires.length > 0 && <div className="card wideCard accent-fire">
-        <p className="cardLabel">Satellite heat detections — NASA FIRMS VIIRS · last 24h</p>
-        <h2>
-          {loading ? 'Loading…'
-            : `${fires.length} hotspot${fires.length > 1 ? 's' : ''} within ${FIRE_INCIDENT_RADIUS_MI} mi`}
-        </h2>
-        {fires.length > 0 && (
-          <div className="flightList">
-            <div className="flightRow fireRow flightHeader">
-              <span>Location</span>
-              <span className="flightDistCol">Distance</span>
-              <span>Heat output</span>
-              <span>Confidence</span>
-            </div>
-            {fires.map((f, i) => (
-              <div key={i} className="flightRow fireRow">
-                <span className="flightIdent" style={{ fontSize: 13 }}>{f.location ?? '—'}</span>
-                <span className="flightDistCol flightDist">{f.distMi.toFixed(0)} mi</span>
-                <span>{f.frp.toFixed(0)} MW</span>
-                <span>{f.confidence === 'h' || f.confidence === 'high' ? 'High' : 'Nominal'}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>}
+  return <section className="safety-overview" aria-label="Safety overview">
+    <section className="safety-notices" aria-label="Official notices">
+      <div className="safety-section-heading"><p className="cardLabel">OFFICIAL NOTICES · NWS / COUNTY OES</p><span>{safetyLoading?'Checking…':safetyError?'Unavailable':`${notices.length} active`}</span></div>
+      {notices.length>0 ? <PagedItems items={notices} size={1} label="Official notices">{(notice,index)=><button key={notice.id||index} className="safety-notice" onClick={()=>openDetail('notice',notice)}><strong>{notice.event||notice.type}</strong><span>{notice.headline||notice.label||notice.notes||notice.description}</span></button>}</PagedItems> : <p className="safety-empty">{safetyLoading?'Checking official notices…':safetyError?'Official notices unavailable':'No active weather or county notices.'}</p>}
+      {safetyError && <span className="safety-feed-error" title={safetyError} role="status">Safety feed update unavailable.</span>}
     </section>
-  )
+    <section className="safety-air" aria-label="Air quality">
+      <div className="safety-section-heading"><p className="cardLabel">AIR QUALITY · SANTEE</p>{safetyUpdated&&<Freshness date={safetyUpdated}/>}</div>
+      <div className="safety-aqi"><strong>{safetyLoading?'…':safetyError?'—':airQuality?.aqi!=null?Math.round(airQuality.aqi):'—'}</strong><span>AQI · {safetyError?'Unavailable':category.label}</span></div>
+      <div className="safety-air-readings"><span>PM2.5 <b>{airQuality?.pm25!=null?`${Math.round(airQuality.pm25)} µg/m³`:'—'}</b></span><span>Ozone <b>{airQuality?.ozone!=null?`${Math.round(airQuality.ozone)} µg/m³`:'—'}</b></span></div>
+    </section>
+    <section className="safety-quakes" aria-label="Earthquakes">
+      <div className="safety-section-heading"><p className="cardLabel">EARTHQUAKES · 7 DAYS</p><span>USGS · {earthquakes.length}</span></div>
+      {earthquakes.length>0 ? <PagedItems items={earthquakes} size={1} label="Earthquakes">{quake=><a key={quake.id} className="safety-quake" href={quake.url} target="_blank" rel="noreferrer"><strong>M {quake.magnitude?.toFixed(1)??'—'}</strong><span title={quake.place}>{distance(quake.distMi)} · {quake.place||'Southern California'}</span><time>{quake.time?.toLocaleString('en-US',{timeZone:TIME_ZONE,weekday:'short',hour:'numeric',minute:'2-digit'})}</time></a>}</PagedItems> : <p className="safety-empty">{safetyLoading?'Checking…':safetyError?'Earthquake feed unavailable':'No recent noticeable earthquakes.'}</p>}
+    </section>
+    <section className="safety-map" aria-label="Nearby fire map">
+      <FireMap incidents={incidents} fires={fires} loading={loading} error={error}/>
+      <div className="safety-map-footer"><span>NASA hotspots are heat signals, not confirmed wildfires.</span>{lastUpdated&&<Freshness date={lastUpdated}/>}</div>
+      {error&&<p className="safety-feed-error" title={error} role="status">Fire feed update unavailable.</p>}
+    </section>
+    <section className="safety-incidents" aria-label="Wildfire incidents">
+      <div className="safety-section-heading"><p className="cardLabel">WILDFIRES · {FIRE_INCIDENT_RADIUS_MI} MI</p><span>WFIGS · {incidents.length}</span></div>
+      <p className="safety-source">Current incidents · {FIRE_INCIDENT_MIN_ACRES}+ acres</p>
+      {incidents.length>0 ? <PagedItems items={incidents} size={1} label="Incidents">{(incident,index)=><button key={`${incident.name}-${index}`} className="safety-report" onClick={()=>openDetail('incident',incident)}><strong>{incident.name}</strong><span>{distance(incident.distMi)} · {acres(incident.acres)}</span><span>{incident.containment!=null?`${incident.containment}% contained`:'Containment unavailable'} <b>DETAILS ↗</b></span></button>}</PagedItems> : <p className="safety-empty">{loading?'Checking incidents…':error?'Incident feed unavailable':'No named incidents nearby.'}</p>}
+    </section>
+    <section className="safety-heat" aria-label="Satellite heat detections">
+      <div className="safety-section-heading"><p className="cardLabel">HEAT DETECTIONS · 24H</p><span>NASA · {fires.length}</span></div>
+      <p className="safety-source">VIIRS satellite · {FIRE_INCIDENT_RADIUS_MI} mi radius</p>
+      {fires.length>0 ? <PagedItems items={fires} size={1} label="Heat detections">{(fire,index)=><button key={index} className="safety-report" onClick={()=>openDetail('heat',fire)}><strong>{fire.location||`${hotspotDirection(fire.lat,fire.lon)} of Santee`}</strong><span>{distance(fire.distMi)} · {Number.isFinite(fire.frp)?`${Math.round(fire.frp)} MW`:'Heat unavailable'}</span><span>{['h','high'].includes(fire.confidence)?'High':'Nominal'} confidence <b>DETAILS ↗</b></span></button>}</PagedItems> : <p className="safety-empty">{loading?'Checking satellites…':error?'Heat feed unavailable':'No satellite heat detections nearby.'}</p>}
+    </section>
+    <dialog ref={detailDialog} className="retro-art-dialog safety-detail-dialog" aria-label="Safety report details"><button className="retro-dialog-close" onClick={()=>detailDialog.current.close()} aria-label="Close safety details">×</button>{detail&&<>
+      <p className="cardLabel">{detail.kind==='notice'?'OFFICIAL NOTICE':detail.kind==='incident'?'WFIGS WILDFIRE INCIDENT':'NASA SATELLITE HEAT DETECTION'}</p>
+      <h2>{detail.kind==='notice'?(detail.data.event||detail.data.type):detail.kind==='incident'?detail.data.name:(detail.data.location||'Satellite heat detection')}</h2>
+      {detail.kind==='notice'?<><p>{detail.data.headline||detail.data.label||detail.data.notes}</p><p className="safety-notice-description">{detail.data.description}</p>{detail.data.expires&&<p>Expires {updated(detail.data.expires)}</p>}{detail.data.severity&&<p>Severity: {detail.data.severity}</p>}{detail.data.url&&<a href={detail.data.url} target="_blank" rel="noreferrer">Open official notice ↗</a>}</>:<dl>
+        <div><dt>Distance</dt><dd>{distance(detail.data.distMi)}</dd></div>
+        {detail.kind==='incident'?<><div><dt>Area</dt><dd>{acres(detail.data.acres)}</dd></div><div><dt>Contained</dt><dd>{detail.data.containment!=null?`${detail.data.containment}%`:'Not supplied'}</dd></div><div><dt>County</dt><dd>{detail.data.county||'California'}</dd></div><div><dt>Updated</dt><dd>{updated(detail.data.updated)}</dd></div></>:<><div><dt>Heat output</dt><dd>{detail.data.frp!=null?`${Math.round(detail.data.frp)} MW`:'Not supplied'}</dd></div><div><dt>Confidence</dt><dd>{['h','high'].includes(detail.data.confidence)?'High':'Nominal'}</dd></div><div><dt>Coordinates</dt><dd>{detail.data.lat.toFixed(4)}, {detail.data.lon.toFixed(4)}</dd></div><a href={`https://www.google.com/maps/search/?api=1&query=${detail.data.lat},${detail.data.lon}`} target="_blank" rel="noreferrer">View location ↗</a></>}
+      </dl>}
+    </>}</dialog>
+  </section>
 }
 
 function escapeHtml(value) {
@@ -902,11 +598,24 @@ function escapeHtml(value) {
   })[char])
 }
 
+function hotspotDirection(lat, lon) {
+  const toRadians = degrees => degrees * Math.PI / 180
+  const toDegrees = radians => radians * 180 / Math.PI
+  const dLon = toRadians(lon - SANTEE.lon)
+  const homeLat = toRadians(SANTEE.lat)
+  const hotspotLat = toRadians(lat)
+  const bearing = (toDegrees(Math.atan2(
+    Math.sin(dLon) * Math.cos(hotspotLat),
+    Math.cos(homeLat) * Math.sin(hotspotLat) - Math.sin(homeLat) * Math.cos(hotspotLat) * Math.cos(dLon),
+  )) + 360) % 360
+  return ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(bearing / 45) % 8]
+}
+
 function loadLeaflet() {
   return Promise.resolve(L)
 }
 
-function FireMap({ incidents, fires, loading }) {
+function FireMap({ incidents, fires, loading, error }) {
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
   const markerLayer = useRef(null)
@@ -955,6 +664,7 @@ function FireMap({ incidents, fires, loading }) {
           boxZoom: false,
           keyboard: false,
           touchZoom: false,
+          zoomSnap: 0.5,
         })
         map.setView([SANTEE.lat, SANTEE.lon], 8)
 
@@ -997,8 +707,8 @@ function FireMap({ incidents, fires, loading }) {
         const rangeCircle = rangeCircleRef.current
         if (!map || !rangeCircle) return
         map.invalidateSize()
-        map.fitBounds(rangeCircle.getBounds(), { padding: [4, 4], animate: false })
-        map.setZoom(map.getZoom() + 1, { animate: false })
+        map.fitBounds(rangeCircle.getBounds(), { padding: [8, 8], animate: false })
+        map.setZoom(map.getZoom() + 1.5, { animate: false })
       }
       requestAnimationFrame(settleMap)
       setTimeout(settleMap, 250)
@@ -1038,6 +748,7 @@ function FireMap({ incidents, fires, loading }) {
           <h2>
             {loading
               ? 'Loading…'
+              : error ? 'Fire data unavailable'
               : markers.length === 0
               ? 'No incidents or hotspots nearby'
               : `${markers.length} nearby signal${markers.length > 1 ? 's' : ''}`}
@@ -1083,236 +794,15 @@ function flightDistanceMi(ac) {
   return ac?.dst != null ? ac.dst * 1.15078 : null
 }
 
-function radarPosition(ac) {
-  if (ac?.lat == null || ac?.lon == null) return null
-  const milesPerLat = 69
-  const milesPerLon = Math.cos((SANTEE.lat * Math.PI) / 180) * milesPerLat
-  const xMi = (ac.lon - SANTEE.lon) * milesPerLon
-  const yMi = (ac.lat - SANTEE.lat) * milesPerLat
-  const distMi = Math.sqrt(xMi ** 2 + yMi ** 2)
-  if (distMi > RADIUS_MI) return null
-  return {
-    left: 50 + (xMi / RADIUS_MI) * 50,
-    top: 50 - (yMi / RADIUS_MI) * 50,
-    distMi,
-  }
-}
-
 function FlightsPage({ flightData }) {
-  const { flights, lastUpdated, error, loading } = flightData
-  const closest = flights[0]
-  const [selectedHex, setSelectedHex] = useState(null)
-  const selectedFlight = flights.find(ac => ac.hex === selectedHex) ?? closest
-  const radarFlights = flights
-    .map(ac => ({ ac, pos: radarPosition(ac) }))
-    .filter(item => item.pos)
-
-  return (
-    <section className="pageGrid">
-      <div className="card wideCard accent-flights">
-        <div className="cardHeaderRow">
-          <div>
-            <p className="cardLabel">Flights</p>
-            <h2>
-              {loading
-                ? 'Loading…'
-                : error
-                ? 'Data unavailable'
-                : flights.length === 0
-                ? 'Clear skies'
-                : `${flights.length} aircraft within ${RADIUS_MI} mi`}
-            </h2>
-          </div>
-          {lastUpdated && (
-            <span className="cardMeta">
-              Updated{' '}
-              {lastUpdated.toLocaleTimeString([], {
-                hour: 'numeric',
-                minute: '2-digit',
-                second: '2-digit',
-              })}
-            </span>
-          )}
-        </div>
-
-        {error && (
-          <p className="placeholderText" style={{ color: 'var(--status-alert)' }}>{error}</p>
-        )}
-
-        {!loading && !error && flights.length === 0 && (
-          <p className="placeholderText">
-            No airborne aircraft detected within {RADIUS_MI} miles of home.
-          </p>
-        )}
-
-        {!error && (
-          <div className="radarLayout">
-            <div className="radarScope" aria-label={`Aircraft radar within ${RADIUS_MI} miles of home`}>
-              <div className="radarSweep" />
-              <div className="radarHome">
-                <span />
-              </div>
-              <div className="radarAxis radarAxisVertical" />
-              <div className="radarAxis radarAxisHorizontal" />
-              <span className="radarRange radarRangeNorth">N</span>
-              <span className="radarRange radarRangeEast">E</span>
-              <span className="radarRange radarRangeSouth">S</span>
-              <span className="radarRange radarRangeWest">W</span>
-              {radarFlights.map(({ ac, pos }) => {
-                const ident = flightIdent(ac)
-                const isSelected = selectedFlight?.hex === ac.hex
-                return (
-                  <button
-                    key={ac.hex}
-                    type="button"
-                    className={`radarPlane ${isSelected ? 'selected' : ''}`}
-                    style={{ left: `${pos.left}%`, top: `${pos.top}%` }}
-                    onClick={() => setSelectedHex(ac.hex)}
-                    aria-label={`${ident}, ${pos.distMi.toFixed(1)} miles away`}
-                  >
-                    <span
-                      className="radarPlaneIcon"
-                      style={{ transform: `rotate(${ac.track ?? 0}deg)` }}
-                    />
-                    <span className="radarPlaneLabel">{ident}</span>
-                  </button>
-                )
-              })}
-            </div>
-
-            <div className="radarDetails">
-              <p className="cardLabel">Selected aircraft</p>
-              {!selectedFlight ? (
-                <h2>None</h2>
-              ) : (
-                <>
-                  <h2>{flightIdent(selectedFlight)}</h2>
-                  <p className="placeholderText">{aircraftName(selectedFlight)}</p>
-                  <div className="statusRow">
-                    <span>Route</span>
-                    <strong>{flightRoute(selectedFlight)}</strong>
-                  </div>
-                  <div className="statusRow">
-                    <span>Distance</span>
-                    <strong>
-                      {flightDistanceMi(selectedFlight) != null
-                        ? `${flightDistanceMi(selectedFlight).toFixed(1)} mi`
-                        : '—'}
-                    </strong>
-                  </div>
-                  <div className="statusRow">
-                    <span>Altitude</span>
-                    <strong>{formatAlt(selectedFlight.alt_baro)}</strong>
-                  </div>
-                  <div className="statusRow">
-                    <span>Speed</span>
-                    <strong>{selectedFlight.gs != null ? `${Math.round(selectedFlight.gs)} kt` : '—'}</strong>
-                  </div>
-                  <div className="statusRow">
-                    <span>Heading</span>
-                    <strong>{degToCompass(selectedFlight.track)}</strong>
-                  </div>
-                  {selectedFlight.r && (
-                    <div className="statusRow">
-                      <span>Reg</span>
-                      <strong>{selectedFlight.r}</strong>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
-        {flights.length > 0 && (
-          <div className="flightList">
-            <div className="flightRow flightHeader">
-              <span>Flight</span>
-              <span>Aircraft</span>
-              <span>Route</span>
-              <span>Altitude</span>
-              <span className="flightDistCol">Distance</span>
-            </div>
-            {flights.map(ac => {
-              const distanceMi = flightDistanceMi(ac)
-              return (
-                <div key={ac.hex} className="flightRow">
-                  <span className="flightIdent">{flightIdent(ac)}</span>
-                  <span className="flightType" style={{ fontSize: 12 }}>{aircraftName(ac)}</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{flightRoute(ac)}</span>
-                  <span>{formatAlt(ac.alt_baro)}</span>
-                  <span className="flightDistCol flightDist">
-                    {distanceMi != null ? `${distanceMi.toFixed(1)} mi` : '—'}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      <div className="card accent-flights">
-        <p className="cardLabel">Closest aircraft</p>
-        {!closest ? (
-          <h2>None</h2>
-        ) : (
-          <>
-            <h2>{flightIdent(closest)}</h2>
-            {closest.t && (
-              <p className="placeholderText" style={{ marginBottom: 12 }}>
-                {aircraftName(closest)}
-              </p>
-            )}
-            {closest.route?.originCode && closest.route?.destCode && (
-              <div className="statusRow">
-                <span>Route</span>
-                <strong style={{ fontSize: 12, textAlign: 'right', maxWidth: 160 }}>
-                  {closest.route.originCity ?? closest.route.originCode} →{' '}
-                  {closest.route.destCity ?? closest.route.destCode}
-                </strong>
-              </div>
-            )}
-            {closest.route?.airline && (
-              <div className="statusRow">
-                <span>Airline</span>
-                <strong style={{ fontSize: 12 }}>{closest.route.airline}</strong>
-              </div>
-            )}
-            <div className="statusRow">
-              <span>Distance</span>
-              <strong>
-                {flightDistanceMi(closest) != null ? `${flightDistanceMi(closest).toFixed(1)} mi` : '—'}
-              </strong>
-            </div>
-            <div className="statusRow">
-              <span>Altitude</span>
-              <strong>{formatAlt(closest.alt_baro)}</strong>
-            </div>
-            <div className="statusRow">
-              <span>Speed</span>
-              <strong>{closest.gs != null ? `${Math.round(closest.gs)} kt` : '—'}</strong>
-            </div>
-            <div className="statusRow">
-              <span>Heading</span>
-              <strong>{degToCompass(closest.track)}</strong>
-            </div>
-            {closest.r && (
-              <div className="statusRow">
-                <span>Reg</span>
-                <strong>{closest.r}</strong>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </section>
-  )
+  return <RetroFlights flightData={flightData} aircraftName={aircraftName} flightDistanceMi={flightDistanceMi} flightRoute={flightRoute} flightIdent={flightIdent} radiusMiles={RADIUS_MI} />
 }
 
-function SoccerScoreCard({ team }) {
+function TeamScoreCard({ team }) {
   const event = team.live ?? team.latest ?? team.next
   const hasScore = event && event.state !== 'pre'
-  const gameDate = event ? new Date(event.date) : null
+  const gameDate = event?.date ? new Date(event.date) : null
+  const goals = team.live ? team.live.scorers ?? [] : team.latest?.scorers ?? []
   return (
     <div className={`card accent-sport soccerCard ${team.live ? 'isLive' : ''}`}>
       <div className="soccerTeamHeader">
@@ -1328,16 +818,20 @@ function SoccerScoreCard({ team }) {
           <div><span>{event.opponentAbbr}</span><strong>{event.opponentScore}</strong></div>
         </div>
       )}
+      {hasScore && goals.length > 0 && <div className="sportsScorers"><span>Goals</span><strong>{goals.map(goal => goal.name).join(' · ')}</strong></div>}
+      {hasScore && goals.length === 0 && team.latest?.recap && <a className="sportsScorers" href={team.latest.recap} target="_blank" rel="noreferrer"><span>Goal recap</span><strong>View game recap ↗</strong></a>}
+      {hasScore && goals.length === 0 && !team.latest?.recap && team.scorerError && <div className="sportsScorers"><span>Goals</span><strong>Details temporarily unavailable</strong></div>}
       {event && !hasScore && (
         <div className="soccerNext">
           <span>Next match</span>
           <strong>{event.home ? 'vs' : '@'} {event.opponent}</strong>
         </div>
       )}
-      {event && <div className="statusRow"><span>{hasScore ? 'Played' : 'Kickoff'}</span><strong>{gameDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · {gameDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</strong></div>}
+      {event && (gameDate || event.dateLabel) && <div className="statusRow"><span>{hasScore ? 'Played' : 'Kickoff'}</span><strong>{event.dateLabel ?? `${gameDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · ${gameDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`}</strong></div>}
       <div className="statusRow"><span>Record</span><strong>{team.record ?? '—'}</strong></div>
       {team.standing && <div className="statusRow"><span>Standing</span><strong>{team.standing}</strong></div>}
-      {team.next && hasScore && <div className="soccerUpcoming"><span>Up next</span><strong>{team.next.home ? 'vs' : '@'} {team.next.opponentAbbr} · {new Date(team.next.date).toLocaleDateString([], { month: 'short', day: 'numeric' })}</strong></div>}
+      {team.next && hasScore && <div className="soccerUpcoming"><span>Up next</span><strong>{team.next.home ? 'vs' : '@'} {team.next.opponentAbbr}{team.next.dateLabel ? ` · ${team.next.dateLabel}` : team.next.date ? ` · ${new Date(team.next.date).toLocaleDateString([], { month: 'short', day: 'numeric' })} · ${new Date(team.next.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}</strong></div>}
+      {!team.next && team.latest && <div className="soccerUpcoming"><span>Next game</span><strong>Schedule not posted</strong></div>}
     </div>
   )
 }
@@ -1371,7 +865,7 @@ function PadresScoreCard({ padresData }) {
       {event && !hasScore && (
         <div className="soccerNext"><span>Next game</span><strong>{event.padresHome ? 'vs' : '@'} {event.opponent}</strong></div>
       )}
-      {event && <div className="statusRow"><span>{hasScore ? 'Played' : 'First pitch'}</span><strong>{gameDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · {gameDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</strong></div>}
+      {event && gameDate && <div className="statusRow"><span>{hasScore ? 'Played' : 'First pitch'}</span><strong>{gameDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · {gameDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</strong></div>}
       <div className="statusRow"><span>Record</span><strong>{standing ? `${standing.wins}–${standing.losses}` : '—'}</strong></div>
       <div className="statusRow"><span>NL West</span><strong>{standing?.divisionRank ? `#${standing.divisionRank}${standing.gamesBack && standing.gamesBack !== '-' ? ` · ${standing.gamesBack} GB` : ''}` : '—'}</strong></div>
       <div className="statusRow"><span>National League</span><strong>{standing?.leagueRank ? `#${standing.leagueRank}` : '—'}</strong></div>
@@ -1385,20 +879,8 @@ function PadresScoreCard({ padresData }) {
   )
 }
 
-function SportsPage({ padresData, soccerData }) {
-  const { teams, loading, error, lastUpdated } = soccerData
-  return (
-    <section className="pageGrid">
-      <div className="card wideCard sportsIntro">
-        <div><p className="cardLabel">San Diego teams</p><h2>Sports scoreboard</h2><p className="placeholderText">Padres, San Diego FC, and Wave scores in one place.</p></div>
-        <Freshness date={lastUpdated ?? padresData.lastUpdated} staleAfterMinutes={5} />
-      </div>
-      <PadresScoreCard padresData={padresData} />
-      {loading && SOCCER_TEAMS.map(team => <div className="card accent-sport soccerCard" key={team.key}><p className="cardLabel">{team.league}</p><h2>Loading {team.shortName}…</h2></div>)}
-      {!loading && teams.map(team => <SoccerScoreCard team={team} key={team.key} />)}
-      {error && <div className="card wideCard"><p className="placeholderText" style={{ color: 'var(--status-alert)' }}>Soccer scores are temporarily unavailable: {error}</p></div>}
-    </section>
-  )
+function SportsPage({ padresData, sportsData }) {
+  return <RetroSports padresData={padresData} sportsData={sportsData} renderDetails={row=>row.key==='padres'?<PadresScoreCard padresData={padresData}/>:<TeamScoreCard team={row}/>} />
 }
 
 function WeatherRadar({ hourly }) {
@@ -1531,7 +1013,7 @@ function WeatherRadar({ hourly }) {
         {frameTime && <span className="cardMeta">{frameIndex === frames.length - 1 ? 'Latest · ' : ''}{frameTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>}
       </div>
       <div ref={mapRef} className="fireMap radarMap">
-        {!inView && !mapReady && <div className="radarIdleState">Radar loads when you scroll here</div>}
+        {!inView && !mapReady && <div className="radarIdleState">Preparing radar…</div>}
         {radarError && <div className="fireMapFallback radarFallback">Radar temporarily unavailable: {radarError}</div>}
       </div>
       <div className="radarControls">
@@ -1539,7 +1021,7 @@ function WeatherRadar({ hourly }) {
         <div className="radarTimeline" aria-label="Radar timeline">
           {frames.map((frame, index) => <button type="button" className={index === frameIndex ? 'active' : ''} aria-label={new Date(frame.time * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} onClick={() => { setPlaying(false); setFrameIndex(index) }} key={frame.time} />)}
         </div>
-        <span>{frames.length ? inView && documentVisible ? 'Past 2 hours' : 'Paused offscreen' : inView ? 'Loading radar…' : 'Loads on view'}</span>
+        <span>{frames.length ? inView && documentVisible ? 'Past 2 hours' : 'Paused offscreen' : inView ? 'Loading radar…' : 'Preparing radar…'}</span>
       </div>
       <div className="radarForecastStatus">
         <span className={`statusDot ${upcomingRain ? 'info' : 'good'}`} />
@@ -1553,81 +1035,28 @@ function WeatherRadar({ hourly }) {
 function WeatherPage({ weatherData }) {
   const { weather, hourly, daily, error, loading, lastUpdated } = weatherData
   const dailyForecast = groupDailyForecast(daily)
+  const [selectedHour, setSelectedHour] = useState(null)
+  const hourDialog = useRef(null)
 
-  return (
-    <section className="pageGrid">
-      <div className="card wideCard accent-weather">
-        <div className="cardHeaderRow"><p className="cardLabel">Santee, CA — current conditions</p><Freshness date={lastUpdated} staleAfterMinutes={20} /></div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 20, padding: '16px 0 4px', flexWrap: 'wrap' }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 80, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: 'var(--text)' }}>
-            {loading ? '—' : weather ? `${weather.temp}°` : '—'}
-          </span>
-          <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 22, color: 'var(--text)' }}>
-              {weather?.description ?? ''}
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 6, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-              {weather?.windSpeed && <span>Wind {weather.windSpeed} {weather.windDirection}</span>}
-              {weather?.humidity != null && <span>{weather.humidity}% humidity</span>}
-              {weather?.precipChance != null && <span>{weather.precipChance}% precip</span>}
-              {weather?.uvIndex != null && <span>UV {formatUvIndex(weather.uvIndex)}</span>}
-            </div>
-          </div>
-        </div>
-        {error && <p style={{ color: 'var(--status-alert)', fontSize: 13, marginTop: 8 }}>{error}</p>}
-      </div>
-
-      {hourly.length > 0 && (
-        <div className="card wideCard accent-weather">
-          <p className="cardLabel">Hourly forecast</p>
-          <div className="hourlyStrip">
-            {hourly.map((h, i) => (
-              <div key={i} className="hourlyCell">
-                <span className="hourlyTime">{h.time}</span>
-                <span className="hourlyTemp">{h.temp}°</span>
-                <span className="hourlyDesc">{h.description}</span>
-                {h.precipChance > 0 && <span className="hourlyPrecip">{h.precipChance}%</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {dailyForecast.length > 0 && (
-        <div className="card wideCard accent-weather">
-          <p className="cardLabel">7-day forecast</p>
-          <div className="flightList">
-            <div className="flightRow dailyRow flightHeader">
-              <span>Day</span>
-              <span>High / Low</span>
-              <span>Conditions</span>
-              <span>Precip</span>
-              <span>Wind</span>
-            </div>
-            {dailyForecast.map((d, i) => (
-              <div key={i} className="flightRow dailyRow">
-                <span className="flightIdent">{d.name}</span>
-                <span className="dailyTemp">
-                  {d.high != null && d.low != null
-                    ? `${d.high}° / ${d.low}°`
-                    : d.high != null
-                    ? `${d.high}° / —`
-                    : `— / ${d.low}°`}
-                </span>
-                <span className="dailyCondition">{d.description}</span>
-                <span style={{ color: d.precipChance > 0 ? 'var(--status-info)' : 'var(--text-faint)' }}>
-                  {d.precipChance > 0 ? `${d.precipChance}%` : '—'}
-                </span>
-                <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>{d.windSpeed} {d.windDir}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <WeatherRadar hourly={hourly} />
+  return <section className="weather-overview" aria-label="Weather overview">
+    <section className="weather-current" aria-label="Current conditions">
+      <div className="weather-current-top"><p className="cardLabel">SANTEE · CURRENT CONDITIONS</p><span className="weather-feed-state">{error?<span className="weather-feed-error" title={error} role="status">Update unavailable</span>:<Freshness date={lastUpdated} staleAfterMinutes={20}/>}</span></div>
+      <div className="weather-current-body"><strong className="weather-temperature">{loading ? '—' : weather ? `${weather.temp}°` : '—'}</strong><div><h2>{weather?.description || (loading ? 'Loading weather…' : 'Weather unavailable')}</h2><div className="weather-current-metrics"><span>Wind <b>{weather?.windSpeed ?? '—'} {weather?.windDirection}</b></span><span>Humidity <b>{weather?.humidity != null ? `${weather.humidity}%` : '—'}</b></span><span>Rain <b>{weather?.precipChance != null ? `${weather.precipChance}%` : '—'}</b></span><span>UV <b>{formatUvIndex(weather?.uvIndex)}</b></span></div></div></div>
     </section>
-  )
+    <section className="weather-hours" aria-label="Hourly forecast">
+      <div className="weather-section-label"><p className="cardLabel">NEXT 12 HOURS</p><span>Select an hour for details</span></div>
+      <div className="weather-hour-grid">{hourly.slice(0,12).map((hour,index)=><button key={index} className="weather-hour" onClick={()=>{setSelectedHour(hour);hourDialog.current.showModal()}} aria-label={`${hour.time}, ${hour.temp} degrees, ${hour.description}, ${hour.precipChance}% rain chance`}><time>{hour.time}</time><strong>{hour.temp}°</strong><span className="weather-hour-description">{hour.description}</span><small className={hour.precipChance>0?'has-rain':''}>{hour.precipChance}%</small></button>)}</div>
+      {!hourly.length && <p className="retro-message">{loading?'Loading hourly forecast…':'Hourly forecast unavailable.'}</p>}
+    </section>
+    <section className="weather-week" aria-label="Seven-day forecast">
+      <p className="cardLabel">7-DAY FORECAST</p>
+      <div className="weather-week-heading"><span>Day</span><span>High / Low</span><span>Conditions</span><span>Rain</span><span>Wind mph</span></div>
+      <div className="weather-week-rows">{dailyForecast.map((day,index)=><div key={index} className="weather-day"><strong title={day.name}>{day.name.replace('This Afternoon','Today').replace('This Morning','Today').replace(/(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/g,name=>name.slice(0,3))}</strong><b>{day.high ?? '—'}° / {day.low ?? '—'}°</b><span className="weather-day-description" title={day.description}>{day.description}</span><span className={day.precipChance>0?'has-rain':''}>{day.precipChance}%</span><span title={`${day.windSpeed} ${day.windDir}`}>{day.windSpeed?.replace(' to ','–').replace(' mph','')} {day.windDir}</span></div>)}</div>
+      {!dailyForecast.length && <p className="retro-message">{loading?'Loading daily forecast…':'Daily forecast unavailable.'}</p>}
+    </section>
+    <div className="weather-map"><WeatherRadar hourly={hourly}/></div>
+    <dialog ref={hourDialog} className="retro-art-dialog weather-hour-dialog" aria-label="Hourly weather details"><button className="retro-dialog-close" onClick={()=>hourDialog.current.close()} aria-label="Close hourly details">×</button>{selectedHour&&<><p className="cardLabel">HOURLY FORECAST · {selectedHour.time}</p><h2>{selectedHour.temp}° · {selectedHour.description}</h2><p>Rain chance: {selectedHour.precipChance}%</p><p>Wind: {selectedHour.windSpeed ?? '—'} {selectedHour.windDir}</p></>}</dialog>
+  </section>
 }
 
 function groupDailyForecast(periods) {
@@ -1712,11 +1141,11 @@ function KegHistory({ history, pours, currentBeerOz, latestKegChange }) {
   const formatHour = hour => hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`
   const busiestWindowLabel = `${formatHour(busiestWindow.startHour)}–${formatHour((busiestWindow.startHour + 3) % 24)}`
 
-  return <>
-    <div className="card wideCard accent-keg kegHistoryCard">
+  return <ScreenDeck className="kegAnalytics">
+    <div className="card wideCard accent-keg kegHistoryCard" data-screen-label="Level history">
       <div className="cardHeaderRow"><div><p className="cardLabel">Last 24 hours</p><h2>Keg level history</h2></div><span className="cardMeta">{points.length} readings</span></div>
       {points.length > 1 ? <>
-        <svg className="kegChart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Beer remaining over the last 24 hours">
+        <svg className="kegChart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Liquid remaining over the last 24 hours">
           <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} className="kegChartGrid" />
           <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} className="kegChartGrid" />
           <polyline points={line} className="kegChartLine" />
@@ -1725,7 +1154,7 @@ function KegHistory({ history, pours, currentBeerOz, latestKegChange }) {
       </> : <p className="placeholderText">History will appear after more readings arrive.</p>}
     </div>
 
-    <div className="card accent-keg">
+    <div className="card accent-keg" data-screen-label="Today">
       <p className="cardLabel">Today at the tap</p>
       <h2>{todaysPours.length ? `${ouncesToday.toFixed(1)} oz poured` : 'No pours yet'}</h2>
       <div className="statusRow"><span>Pours</span><strong>{todaysPours.length}</strong></div>
@@ -1735,14 +1164,14 @@ function KegHistory({ history, pours, currentBeerOz, latestKegChange }) {
       <div className="statusRow"><span>Current keg</span><strong>{latestKegChange ? `Since ${latestKegChange.changedAt.toLocaleDateString([], { month: 'short', day: 'numeric' })}` : 'Original keg'}</strong></div>
     </div>
 
-    <div className="card accent-keg">
+    <div className="card accent-keg" data-screen-label="Recent pours">
       <p className="cardLabel">Recent pours</p>
       <h2>{activePours.length ? `${activePours.length} from this keg` : 'Waiting for first pour'}</h2>
       {activePours.slice(0, 5).map(pour => <div className="statusRow" key={pour.id}><span>{pour.pouredAt.toLocaleDateString([], { weekday: 'short' })} · {pour.pouredAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span><strong>{pour.ounces.toFixed(1)} oz</strong></div>)}
       {!activePours.length && <p className="placeholderText">New ESP32 pour events will show here.</p>}
     </div>
 
-    <div className="card wideCard accent-keg drinkingTimesCard">
+    <div className="card wideCard accent-keg drinkingTimesCard" data-screen-label="Drinking times">
       <div className="cardHeaderRow">
         <div><p className="cardLabel">Last 30 days</p><h2>Busiest drinking times</h2></div>
         <span className="cardMeta">{pours.length} recorded {pours.length === 1 ? 'pour' : 'pours'}</span>
@@ -1762,21 +1191,23 @@ function KegHistory({ history, pours, currentBeerOz, latestKegChange }) {
         {pours.length < 5 && <p className="placeholderText drinkingLearning">Early trend—this gets more useful after a few more pours.</p>}
       </> : <p className="placeholderText">No pour history yet. This chart will start learning automatically with the next keg.</p>}
     </div>
-  </>
+  </ScreenDeck>
 }
 
 function KegPage({ kegData }) {
+  const isWater = kegData.scaleId === 'sparkling-water'
   const { keg, history, pours, latestKegChange, error, loading, lastUpdated } = kegData
   const percent = keg?.percent ?? 0
   const pintsLeft = keg?.pintsLeft ?? 0
   const verdict =
-    loading ? 'Consulting the sacred scale…'
-    : error ? 'The taproom oracle is not answering'
-    : percent >= 65 ? 'Morale is high. Foam discipline remains essential.'
-    : percent >= 30 ? 'Respectable reserves. Nobody panic.'
-    : percent >= 10 ? 'The keg has entered the danger zone.'
-    : 'This is not a drill. Invite fewer people.'
-  const pintWord = pintsLeft === 1 ? 'pint' : 'pints'
+    loading ? 'Loading keg status…'
+    : error ? 'Keg sensor unavailable'
+    : !keg ? 'No keg reading available.'
+    : percent >= 65 ? 'Keg level is high.'
+    : percent >= 30 ? 'Keg level is moderate.'
+    : percent >= 10 ? 'Keg is running low.'
+    : 'Keg is nearly empty.'
+  const pintWord = isWater ? (pintsLeft === 1 ? 'pour' : 'pours') : (pintsLeft === 1 ? 'pint' : 'pints')
   const partyMath =
     pintsLeft >= 24 ? 'Enough for a proper evening.'
     : pintsLeft >= 12 ? 'Enough, if everyone behaves.'
@@ -1784,7 +1215,7 @@ function KegPage({ kegData }) {
     : 'The tap is giving thoughts and prayers.'
 
   return (
-    <section className="pageGrid kegPage">
+    <ScreenDeck className="kegPage" groups={[{label:'On tap',classes:['kegHero','kegStats','kegStatus']},{label:'Analytics',types:[KegHistory]}]}>
       <div className="card wideCard accent-keg kegHero">
         <div className="cardHeaderRow">
           <div>
@@ -1794,7 +1225,7 @@ function KegPage({ kegData }) {
                 ? 'Loading…'
                 : error
                 ? 'Unavailable'
-                : keg?.kegName ?? 'Shep Shack Tap'}
+                : keg?.kegName ?? (isWater ? 'Sparkling Water' : 'Shep Shack Tap')}
             </h2>
           </div>
           {lastUpdated && (
@@ -1803,13 +1234,7 @@ function KegPage({ kegData }) {
         </div>
 
         <div className="kegHeroBody">
-          <div className="kegGauge" style={{ '--keg-level': `${Math.max(0, Math.min(100, percent))}%` }}>
-            <div className="kegGlass">
-              <div className="kegBeer" />
-              <div className="kegFoam" />
-            </div>
-            <span>{loading || error ? '—' : `${Math.round(percent)}%`}</span>
-          </div>
+          <div className="retro-keg-hero-gauge"><RetroKegGauge level={loading||error?null:kegLevel(keg)} liquid={isWater?'water':'beer'}/><strong>{loading||error||kegLevel(keg)===null?'—':`${kegLevel(keg)}%`}</strong></div>
 
           <div className="kegReadout">
             <p className="kegVerdict">{verdict}</p>
@@ -1817,14 +1242,14 @@ function KegPage({ kegData }) {
               {loading || error ? '—' : pintsLeft.toFixed(1)}
               <span>{pintWord} left</span>
             </p>
-            <p className="placeholderText">{partyMath}</p>
+            <p className="placeholderText">{isWater?'Sparkling water · 16 oz pours':partyMath}</p>
           </div>
         </div>
       </div>
 
-      <div className="card accent-keg">
-        <p className="cardLabel">Beer math</p>
-        <h2>{loading || error ? 'Awaiting pour data' : `${Math.round(keg.beerOz ?? 0)} oz on board`}</h2>
+      <div className="card accent-keg kegStats">
+        <p className="cardLabel">{isWater?'Water supply':'Beer math'}</p>
+        <h2>{loading || error ? 'Awaiting pour data' : `${Math.round(keg?.beerOz ?? 0)} oz on board`}</h2>
         <div className="statusRow">
           <span>Level</span>
           <strong>
@@ -1833,11 +1258,11 @@ function KegPage({ kegData }) {
           </strong>
         </div>
         <div className="statusRow">
-          <span>Pints left</span>
+          <span>{isWater?'16 oz pours left':'Pints left'}</span>
           <strong>{keg?.pintsLeft != null ? keg.pintsLeft.toFixed(1) : '—'}</strong>
         </div>
         <div className="statusRow">
-          <span>Beer</span>
+          <span>{isWater?'Water':'Beer'}</span>
           <strong>{keg?.beerOz != null ? `${Math.round(keg.beerOz)} oz` : '—'}</strong>
         </div>
         <div className="statusRow">
@@ -1848,7 +1273,7 @@ function KegPage({ kegData }) {
           <span>Scale</span>
           <strong>
             <span className={`statusDot ${keg?.hxReady && keg?.hasSavedTare ? 'good' : 'neutral'}`} />
-            {keg?.hxReady && keg?.hasSavedTare ? 'Sober enough' : 'Questionable'}
+            {keg?.hxReady && keg?.hasSavedTare ? (isWater?'Sensor ready':'Sober enough') : (isWater?'Needs attention':'Questionable')}
           </strong>
         </div>
         {error && (
@@ -1858,8 +1283,8 @@ function KegPage({ kegData }) {
         )}
       </div>
 
-      <div className="card accent-keg">
-        <p className="cardLabel">Taproom nonsense</p>
+      <div className="card accent-keg kegStatus">
+        <p className="cardLabel">Tap status</p>
         <h2>{loading ? 'Loading…' : error ? 'Closed for mysteries' : keg?.ready ? 'Open for business' : 'Tap says no'}</h2>
         <div className="statusRow">
           <span>Official status</span>
@@ -1871,12 +1296,12 @@ function KegPage({ kegData }) {
         </div>
         <div className="statusRow">
           <span>Next move</span>
-          <strong>{percent >= 20 ? 'Pour responsibly' : 'Text the supplier'}</strong>
+          <strong>{isWater?(percent>=20?'Ready to pour':'Refill the water keg'):(percent >= 20 ? 'Pour responsibly' : 'Text the supplier')}</strong>
         </div>
       </div>
 
       <KegHistory history={history} pours={pours} currentBeerOz={keg?.beerOz} latestKegChange={latestKegChange} />
-    </section>
+    </ScreenDeck>
   )
 }
 
@@ -1922,9 +1347,9 @@ function HousePage({ session }) {
   }
 
   return (
-    <section className="pageGrid">
+    <ScreenDeck className="housePage">
 
-      <div className="card accent-house accountCard">
+      <div className="card accent-house accountCard" data-screen-label="Account">
         <p className="cardLabel">Household account</p>
         <h2>{session.user.email}</h2>
         <div className="statusRow"><span>Access</span><strong><span className="statusDot good" />Household member</strong></div>
@@ -1932,11 +1357,11 @@ function HousePage({ session }) {
         <button className="signOutButton accountSignOut" type="button" onClick={() => supabase.auth.signOut({ scope: 'local' })}>Sign out</button>
       </div>
 
-      <div className="card accent-house notificationSettingsCard">
+      <div className="card accent-house notificationSettingsCard" data-screen-label="Notifications">
         <NotificationControl userId={session.user.id} mode="settings" />
       </div>
 
-      <div className="card accent-house">
+      <div className="card accent-house" data-screen-label="Network">
         <p className="cardLabel">Network</p>
         <h2>{network.online ? 'Online' : 'Offline'}</h2>
         <div className="statusRow">
@@ -1957,7 +1382,7 @@ function HousePage({ session }) {
         </div>
       </div>
 
-      <div className="card accent-house">
+      <div className="card accent-house" data-screen-label="Speed test">
         <p className="cardLabel">Speed test</p>
         <h2>
           {speedTest.running
@@ -1999,7 +1424,7 @@ function HousePage({ session }) {
         </button>
       </div>
 
-      <div className="card accent-house">
+      <div className="card accent-house" data-screen-label="System">
         <p className="cardLabel">System</p>
         <h2>Dashboard</h2>
         <div className="statusRow">
@@ -2015,8 +1440,10 @@ function HousePage({ session }) {
           <strong>Automatic</strong>
         </div>
       </div>
-    </section>
+    </ScreenDeck>
   )
 }
 
 export default App
+
+export { HomePage, SafetyPage, SportsPage, FlightsPage, KegPage, WeatherPage }

@@ -41,6 +41,10 @@ on conflict (user_id) do nothing;
 
 Removing that row immediately removes the account's dashboard data access without deleting its Auth account.
 
+## Sports data
+
+The Sports page loads Padres data from MLB Stats API and Wave, San Diego FC, and Ducks schedules and goal summaries from ESPN through the household-protected `sports` Edge Function. The Gulls' latest result and next game come from the official team schedule; its recap link provides goal details. Schedule feeds can have no upcoming game listed between seasons.
+
 ## Supabase deployment
 
 The repository contains migrations and Edge Functions under `supabase/`. Apply migrations before deploying functions that depend on them:

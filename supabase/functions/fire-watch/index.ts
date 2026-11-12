@@ -1,9 +1,15 @@
 import { isHouseholdMember } from '../_shared/household-auth.ts'
 
 const HOME = { lat: Number(Deno.env.get('HOME_LAT')), lon: Number(Deno.env.get('HOME_LON')) }
-const RADIUS_MI = 30
+const RADIUS_MI = 25
 const MIN_ACRES = 5
 const FIRMS_BBOX = '-120,31,-114,35'
+// VIIRS regularly sees landfill operations and methane infrastructure as heat.
+// Keep these tight to the facility footprints; official WFIGS incidents are not filtered.
+const FIRMS_EXCLUSION_ZONES = [
+  { name: 'Miramar Landfill', south: 32.8480, north: 32.8612, west: -117.1778, east: -117.1330 },
+  { name: 'Sycamore Landfill', south: 32.8452, north: 32.8748, west: -117.0348, east: -117.0220 },
+]
 const WFIGS_URL = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations_Current/FeatureServer/0/query'
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' }
 
@@ -27,6 +33,12 @@ function distanceMi(lat1: number, lon1: number, lat2: number, lon2: number) {
 
 function localDate() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+}
+
+function isExcludedHotspot(lat: number, lon: number) {
+  return FIRMS_EXCLUSION_ZONES.some(zone =>
+    lat >= zone.south && lat <= zone.north && lon >= zone.west && lon <= zone.east
+  )
 }
 
 async function getIncidents() {
@@ -62,6 +74,7 @@ async function getHotspots() {
     if (confidence === 'l' || confidence === 'low') continue
     const lat = Number(cells[at('latitude')]); const lon = Number(cells[at('longitude')])
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue
+    if (isExcludedHotspot(lat, lon)) continue
     const distMi = distanceMi(HOME.lat, HOME.lon, lat, lon)
     if (distMi > RADIUS_MI) continue
     const id = `${Math.round(lat * 10)},${Math.round(lon * 10)}`

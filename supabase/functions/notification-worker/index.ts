@@ -1,3 +1,4 @@
+import { isRecordedPour } from '../_shared/keg-pour-policy.js'
 import webpush from 'npm:web-push@3.6.7'
 
 const PROJECT_URL = Deno.env.get('SUPABASE_URL')!
@@ -24,40 +25,55 @@ async function rest(path: string, init: RequestInit = {}) {
   return text ? JSON.parse(text) : null
 }
 
-async function collectKeg(): Promise<Notice[]> {
-  const rows = await rest('keg_readings?select=id,recorded_at,payload&order=recorded_at.desc&limit=1')
+async function collectScale(scaleId: string, name: string): Promise<Notice[]> {
+  const [rows, changes] = await Promise.all([
+    rest(`keg_scale_readings?scale_id=eq.${scaleId}&select=id,recorded_at,payload&order=recorded_at.desc&limit=1`),
+    rest(`keg_scale_changes?scale_id=eq.${scaleId}&select=id,changed_at,starting_percent&order=changed_at.desc&limit=1`),
+  ])
   if (!rows?.length) return []
   const reading = rows[0]
   const ageMinutes = (Date.now() - new Date(reading.recorded_at).getTime()) / 60000
-  const day = reading.recorded_at.slice(0, 10)
-  if (ageMinutes > 10) return [{ key: `keg-stale:${day}:${new Date().getUTCHours()}`, category: 'keg', title: 'Keg sensor is offline', body: `No fresh reading for ${Math.floor(ageMinutes)} minutes.`, url: '/?page=keg' }]
-  const percent = Number(reading.payload?.percent)
-  if (percent <= 10) return [{ key: `keg-critical:${day}`, category: 'keg', title: 'Keg critically low', body: `Only ${Math.round(percent)}% remains. Time for a replacement.`, url: '/?page=keg' }]
-  if (percent <= 20) return [{ key: `keg-low:${day}`, category: 'keg', title: 'Keg is running low', body: `${Math.round(percent)}% remains in the keg.`, url: '/?page=keg' }]
+  const kegChange = changes?.[0]
+  const kegId = kegChange?.id ?? (scaleId === 'beer' ? 'original' : `${scaleId}:original`)
+  const target = `/?page=keg&scale=${scaleId}`
+  if (ageMinutes > 10) return [{ key: `keg-stale:${kegId}`, category: 'keg', title: `${name} sensor is offline`, body: `No fresh reading for ${Math.floor(ageMinutes)} minutes.`, url: target }]
+  const rawPercent = Number(reading.payload?.percent)
+  const startingPercent = Number(kegChange?.starting_percent)
+  const readingIsFromCurrentKeg = kegChange?.changed_at && new Date(reading.recorded_at) >= new Date(kegChange.changed_at)
+  const percent = readingIsFromCurrentKeg && Number.isFinite(startingPercent) && startingPercent > 0
+    ? Math.max(0, Math.min(100, rawPercent / startingPercent * 100))
+    : rawPercent
+  if (percent <= 10) return [{ key: `keg-level:${kegId}`, category: 'keg', title: `${name} critically low`, body: `Only ${Math.round(percent)}% remains. Time for a replacement.`, url: target }]
+  if (percent <= 20) return [{ key: `keg-level:${kegId}`, category: 'keg', title: `${name} is running low`, body: `${Math.round(percent)}% remains in the keg.`, url: target }]
   return []
+}
+
+async function collectKeg(): Promise<Notice[]> {
+  const notices = await Promise.all([collectScale('beer', 'Beer keg'), collectScale('sparkling-water', 'Sparkling Water')])
+  return notices.flat()
 }
 
 async function collectKegPours(): Promise<Notice[]> {
   const since = new Date(Date.now() - 10 * 60 * 1000).toISOString()
-  const rows = await rest(`keg_pours?select=id,poured_at,ounces,beer_oz_after&poured_at=gte.${encodeURIComponent(since)}&order=poured_at.asc`)
-  return (rows ?? []).map((pour: any) => ({
+  const rows = await rest(`keg_scale_pours?select=id,scale_id,poured_at,ounces,beer_oz_after&poured_at=gte.${encodeURIComponent(since)}&order=poured_at.asc`)
+  return (rows ?? []).filter((pour: any) => isRecordedPour(Number(pour.ounces))).map((pour: any) => ({
     key: `keg-pour:${pour.id}`,
     category: 'keg' as const,
-    title: 'Beer poured',
+    title: pour.scale_id === 'sparkling-water' ? 'Sparkling water poured' : 'Beer poured',
     body: `${Number(pour.ounces).toFixed(1)} oz poured${pour.beer_oz_after != null ? ` · ${Math.round(Number(pour.beer_oz_after))} oz left` : ''}`,
-    url: '/?page=keg',
+    url: `/?page=keg&scale=${pour.scale_id}`,
   }))
 }
 
 async function collectKegChanges(): Promise<Notice[]> {
   const since = new Date(Date.now() - 10 * 60 * 1000).toISOString()
-  const rows = await rest(`keg_changes?select=id,changed_at,starting_ounces,starting_percent&changed_at=gte.${encodeURIComponent(since)}&order=changed_at.asc`)
+  const rows = await rest(`keg_scale_changes?select=id,scale_id,changed_at,starting_ounces,starting_percent&changed_at=gte.${encodeURIComponent(since)}&order=changed_at.asc`)
   return (rows ?? []).map((change: any) => ({
     key: `keg-change:${change.id}`,
     category: 'keg' as const,
-    title: 'Fresh keg detected',
-    body: `${change.starting_ounces == null ? 'A new keg is on the scale.' : `${Math.round(Number(change.starting_ounces))} oz ready to pour`}${change.starting_percent == null ? '' : ` · ${Math.round(Number(change.starting_percent))}% full`}`,
-    url: '/?page=keg',
+    title: change.scale_id === 'sparkling-water' ? 'Fresh sparkling-water keg' : 'Fresh keg detected',
+    body: `${change.starting_ounces == null ? 'A new keg is on the scale.' : `${Math.round(Number(change.starting_ounces))} oz ready to pour`} · 100% full`,
+    url: `/?page=keg&scale=${change.scale_id}`,
   }))
 }
 
@@ -111,7 +127,7 @@ async function collectOfficialAlerts(): Promise<Notice[]> {
   if (!response.ok) return []
   const data = await response.json()
   const weather: Notice[] = (data.weatherAlerts ?? []).map((alert: any) => ({
-    key: `weather:${alert.id}`,
+    key: `weather:${alert.notificationId ?? alert.id}`,
     category: 'weather',
     title: alert.event ?? 'Weather warning',
     body: alert.headline ?? alert.description ?? 'A weather alert affects the house.',
