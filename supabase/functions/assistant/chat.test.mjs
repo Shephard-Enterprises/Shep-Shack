@@ -53,12 +53,14 @@ test('save and settle an answer with server-loaded preferences and authenticated
   const reserveIndex = h.calls.findIndex(call => call.url.endsWith('/assistant_reserve'))
   assert.ok(reserveIndex < apiIndex)
   const paid = h.calls[apiIndex]
+  assert.equal(MODEL, 'gpt-6-luna')
   assert.equal(paid.body.model, MODEL)
+  assert.equal(paid.body.reasoning.effort, 'none')
   assert.equal(paid.body.store, false)
   assert.equal(paid.body.tools, undefined)
   assert.match(paid.body.input[0].content, /Dumbbells only/)
   assert.doesNotMatch(JSON.stringify(paid.body), /IGNORE SERVER/)
-  assert.equal(h.calls.at(-1).body.p_amount, 0.0012)
+  assert.equal(h.calls.at(-1).body.p_amount, 0.00015)
   assert.equal(h.calls.at(-1).options.headers.Authorization, 'Bearer private')
   assert.equal(h.calls.at(-1).body.p_messages.length, 4)
 })
@@ -81,7 +83,7 @@ test('ambiguous failures retain their full reservation; rejected requests releas
 test('usage without text still settles the billed tokens', async () => {
   const h = harness({ upstream: () => json({ output: [], usage: { input_tokens: 1000, output_tokens: 500 } }) })
   assert.ok((await (await h.send()).json()).error)
-  assert.equal(h.calls.at(-1).body.p_amount, 0.003)
+  assert.equal(h.calls.at(-1).body.p_amount, 0.00035)
 })
 
 test('context and output limits bound costs, including multibyte text', () => {
@@ -95,8 +97,11 @@ test('context and output limits bound costs, including multibyte text', () => {
   assert.ok(bytes(responseText({ output: [{ type: 'message', content: [{ type: 'output_text', text: 'x'.repeat(40000) }] }] })) <= 16000)
 })
 
-test('cached tokens, reasoning/output tokens, and missing usage are accounted for', () => {
-  assert.equal(usageCost({ input_tokens: 1000, output_tokens: 1000, input_tokens_details: { cached_tokens: 1000 } }), 0.004575)
+test('Luna input, cached input, reasoning/output tokens, and missing usage are accounted for', () => {
+  assert.equal(usageCost({ input_tokens: 1000000, output_tokens: 0 }), 0.05) // Capped at the reservation.
+  assert.equal(usageCost({ input_tokens: 10000, output_tokens: 10000 }), 0.006)
+  assert.equal(usageCost({ input_tokens: 10000, output_tokens: 0 }), 0.001)
+  assert.equal(usageCost({ input_tokens: 1000, output_tokens: 1000, input_tokens_details: { cached_tokens: 1000 } }), 0.00051)
   assert.equal(usageCost(undefined), 0.05)
   assert.equal(usageCost({ input_tokens: -1, output_tokens: 2 }), 0.05)
 })

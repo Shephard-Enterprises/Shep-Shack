@@ -51,3 +51,20 @@ test('custom movements have stable IDs and legacy modes are not misclassified', 
   assert.equal(movementIdentity({ name: 'Plank', mode: 'timed' }), 'plank')
   assert.throws(() => linkExercises([exercise('Dumbbell curl', 'nonexistent')]), /specific movement/)
 })
+
+
+test('a linked movement supports time or reps with separate progress and prior weights', () => {
+  const reps = linkExercises([exercise('Dumbbell curl', 'dumbbell-curl')])
+  const timed = linkExercises([{ ...exercise('Dumbbell curl', 'dumbbell-curl'), mode: 'timed', seconds: 45 }])
+  assert.equal(timed[0].mode, 'timed')
+  assert.equal(timed[0].movement_id, reps[0].movement_id)
+  const repSession = logged(routine('Reps', reps), 20, '2026-01-01')
+  const timeSession = createSession(routine('Time', timed))
+  timeSession.status = 'completed'
+  timeSession.exercises[0].sets = [{ id: 't', weight: 10, seconds: 45, done: true }]
+  const sessions = [timeSession, repSession]
+  assert.equal(exerciseProgress(sessions, 'dumbbell-curl', 'lb', BUILTIN_MOVEMENTS, 'reps').length, 1)
+  assert.equal(exerciseProgress(sessions, 'dumbbell-curl', 'lb', BUILTIN_MOVEMENTS, 'timed')[0].duration, 45)
+  assert.equal(createSession(routine('Next reps', reps), sessions).exercises[0].sets[0].weight, 20)
+  assert.equal(createSession(routine('Next time', timed), sessions).exercises[0].sets[0].weight, 10)
+})

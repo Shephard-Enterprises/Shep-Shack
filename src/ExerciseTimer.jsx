@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import useTimerAudio from './useTimerAudio'
 import { formatSeconds, timerRemaining } from './fitness-model.mjs'
 
 export default function ExerciseTimer({ name, setNumber, target, timer, disabled, onChange, onRecord }) {
@@ -11,7 +12,9 @@ export default function ExerciseTimer({ name, setNumber, target, timer, disabled
   const remaining = timer ? timerRemaining(timer, Math.max(now, timer.startedAt || 0)) : target
   const elapsed = timer ? Math.max(0, timer.duration - remaining) : 0
   const running = Boolean(timer?.endAt) && remaining > 0
+  const audio = useTimerAudio({ running, complete: Boolean(timer) && remaining === 0, phase: timer?.endAt, remaining, tick: now })
   function start() {
+    audio.startSound()
     const start = Date.now()
     const seconds = remaining > 0 ? remaining : target
     onChange({ duration: timer && remaining > 0 ? timer.duration : target, remaining: seconds, startedAt: start, endAt: start + seconds * 1000 })

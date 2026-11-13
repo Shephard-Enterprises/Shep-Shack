@@ -27,10 +27,12 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
   const [threadId, setThreadId] = useState(() => crypto.randomUUID())
   const [messages, setMessages] = useState([])
   const [draft, setDraft] = useState('')
+  const [saveAs, setSaveAs] = useState('auto')
   const [pending, setPending] = useState('')
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(false)
   const [configured, setConfigured] = useState(false)
+  const [workoutsReady, setWorkoutsReady] = useState(false)
   const [budget, setBudget] = useState(null)
   const [cap, setCap] = useState('5')
   const [preferences, setPreferences] = useState('')
@@ -69,6 +71,7 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
       setCap(String(nextBudget.limit))
       setPreferences(profile?.preferences || '')
       setConfigured(status.configured)
+      setWorkoutsReady(Boolean(status.capabilities?.adhocWorkouts))
       if (!busy) {
         const active = nextThreads.find(thread => thread.id === threadId) || nextThreads[0]
         if (active) await loadThread(active.id)
@@ -115,9 +118,9 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
     setNotice('')
     setPending(message)
     try {
-      const result = await assistant({ threadId, requestId: crypto.randomUUID(), message, page, profileId })
+      const result = await assistant({ threadId, requestId: crypto.randomUUID(), message, page, profileId, saveAs })
       setMessages(result.messages)
-      if (result.savedRoutineId) window.dispatchEvent(new CustomEvent('fitness-updated', { detail: { profileId: result.fitnessProfileId } }))
+      if (result.savedRoutineId || result.savedSessionId) window.dispatchEvent(new CustomEvent('fitness-updated', { detail: { profileId: result.fitnessProfileId } }))
       setDraft('')
       if (result.truncated) setNotice('The answer reached its length limit. Ask a follow-up to continue.')
     } catch (failure) { setError(failure.message) }
@@ -171,11 +174,13 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
         </div>
         <div className="assistant-budget" aria-live="polite">{budget ? `${money(budget.used)} / $${Number(budget.limit).toFixed(2)} this month · household` : 'Loading monthly budget…'}</div>
         {loading && <p className="assistant-notice" role="status">Loading your assistant…</p>}
+        {configured && !workoutsReady && !loading && <p className="assistant-notice">Patty’s updated workout service needs deployment before this version can send messages.</p>}
         {!configured && !loading && <p className="assistant-notice">Chat needs to be connected before it can answer. Your preferences and budget can still be saved.</p>}
         {error && <p className="assistant-error" role="alert">{error}</p>}
         {notice && <p className="assistant-notice" role="status">{notice}</p>}
         {view === 'chat' ? <>
           <div className="assistant-training-profile"><label htmlFor="assistant-training-profile">Training for</label><select id="assistant-training-profile" value={profileId} disabled={locked} onChange={event => onProfileChange(event.target.value)}>{FITNESS_PROFILES.map(profile => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select><span>Workouts save here</span></div>
+          <div className="assistant-training-profile"><label htmlFor="assistant-save-as">Save workouts as</label><select id="assistant-save-as" value={saveAs} disabled={locked} onChange={event => setSaveAs(event.target.value)}><option value="auto">Follow my request</option><option value="adhoc">One-off workout</option><option value="routine">Reusable routine</option></select></div>
           <div className="assistant-history">
             <label htmlFor="assistant-thread">Conversation</label>
             <select id="assistant-thread" value={exists ? threadId : ''} disabled={locked} onChange={event => selectThread(event.target.value)}>
@@ -185,7 +190,7 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
             {exists && <button type="button" disabled={locked} onClick={removeThread} aria-label="Delete selected conversation">Delete</button>}
           </div>
           <div className="assistant-messages" role="log" aria-label="Conversation messages" aria-busy={busy}>
-            {!messages.length && !pending && <div className="assistant-welcome"><img className="assistant-avatar" src={pattyAvatar} alt="Patty" width="96" height="96" /><h3>What’s on your mind?</h3><p>Plan a workout, ask about a movement, or get help with your day.</p><p>Select a training profile above. I can save a routine there and use its workout logs to report your progress.</p><div>{['Write and save my next workout', 'How is my training progressing?'].map(prompt => <button key={prompt} type="button" disabled={locked} onClick={() => { setDraft(prompt); input.current?.focus() }}>{prompt} ↗</button>)}</div></div>}
+            {!messages.length && !pending && <div className="assistant-welcome"><img className="assistant-avatar" src={pattyAvatar} alt="Patty" width="96" height="96" /><h3>What’s on your mind?</h3><p>Plan a workout, ask about a movement, or get help with your day.</p><p>Select a training profile above. I can set up your workout there. Open Fitness to review it and hit Start.</p><div>{['Write a one-off workout for today', 'How is my training progressing?'].map(prompt => <button key={prompt} type="button" disabled={locked} onClick={() => { setDraft(prompt); input.current?.focus() }}>{prompt} ↗</button>)}</div></div>}
             {messages.map((message, index) => <article key={index} className={`assistant-message ${message.role}`}><small>{message.role === 'user' ? 'YOU' : 'PATTY'}</small><div>{message.content}</div>{message.workoutId && <button className="assistant-open-workout" type="button" disabled={locked} onClick={() => { onOpenFitness(message.fitnessProfileId, message.workoutId); dialog.current.close() }}>Open in Fitness →</button>}</article>)}
             {pending && <><article className="assistant-message user"><small>YOU</small><div>{pending}</div></article><p className="assistant-thinking" role="status">Patty is thinking…</p></>}
             <div ref={bottom} />
@@ -194,7 +199,7 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
           <form className="assistant-compose" onSubmit={send}>
             <label className="assistant-sr-only" htmlFor="assistant-message">Message Patty</label>
             <textarea ref={input} id="assistant-message" placeholder="Ask anything…" value={draft} maxLength={6000} disabled={locked} onChange={event => setDraft(event.target.value)} rows={2} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !window.matchMedia('(pointer: coarse)').matches) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} />
-            <button type="submit" disabled={locked || !configured || !draft.trim() || atCap}>{busy ? 'Thinking…' : 'Send ↑'}</button>
+            <button type="submit" disabled={locked || !configured || !workoutsReady || !draft.trim() || atCap}>{busy ? 'Thinking…' : 'Send ↑'}</button>
           </form>
           <p className="assistant-footnote">Powered by OpenAI · Chats saved to your account · Recent messages provide context</p>
         </> : <div className="assistant-settings">

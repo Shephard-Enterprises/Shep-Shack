@@ -14,14 +14,20 @@ test('routine paste preserves rep ranges and rejects malformed or excessive plan
   assert.throws(() => validateRoutine({ ...routine, name: ' ' }), /name/)
 })
 test('new workout uses prior weights across units without checking off old work', () => {
-  const next = createSession({ ...routine, unit: 'kg' }, session())
-  assert.equal(next.exercises[0].sets[0].weight, 45.36)
+  const next = createSession({ ...routine, unit: 'kg' }, session('kg'))
+  assert.equal(next.unit, 'lb')
+  assert.equal(next.exercises[0].sets[0].weight, 220.46)
   assert.equal(next.exercises[0].sets[0].reps, '')
   assert.equal(next.exercises[0].sets[0].done, false)
 })
-test('completion requires valid checked sets, permits bodyweight, ignores unfinished sets in totals', () => {
+test('completion allows zero or partial sets, validates checked sets, and ignores unfinished sets in totals', () => {
   const draft = createSession(routine)
-  assert.throws(() => normalizeSession(draft, true), /at least one/)
+  const empty = normalizeSession(draft, true)
+  assert.equal(empty.status, 'completed')
+  assert.ok(empty.completed_at)
+  assert.ok(empty.exercises[0].sets.every(set => !set.done))
+  assert.equal(totalVolume(empty), 0)
+  assert.deepEqual(exerciseProgress([empty], 'legacy:bench press'), [])
   draft.exercises[0].sets = [done(0, 15), { ...done(100, 10), done: false }]
   assert.equal(normalizeSession(draft, true).status, 'completed')
   assert.equal(totalVolume(draft), 0)

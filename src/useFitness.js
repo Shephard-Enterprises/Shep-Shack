@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
-import { normalizeSession, validateRoutine } from './fitness-model.mjs'
+import { createAdhocSession, normalizeSession, validateRoutine } from './fitness-model.mjs'
 import { linkExercises, resolveMovement } from '../supabase/functions/_shared/movement-library.mjs'
 
 const check = result => { if (result.error) throw result.error; return result.data }
-const sessionFields = session => Object.fromEntries(['id', 'routine_id', 'name', 'unit', 'performed_on', 'started_at', 'completed_at', 'status', 'kind', 'minutes', 'distance', 'distance_unit', 'notes', 'exercises'].map(field => [field, session[field]]))
+const sessionFields = session => Object.fromEntries(['id', 'routine_id', 'is_adhoc', 'timer_order', 'timer_state', 'name', 'unit', 'performed_on', 'started_at', 'execution_started_at', 'completed_at', 'status', 'kind', 'minutes', 'distance', 'distance_unit', 'notes', 'exercises'].map(field => [field, session[field]]))
 export default function useFitness(userId, profileId) {
   const [routines, setRoutines] = useState([])
   const [sessions, setSessions] = useState([])
@@ -40,8 +40,8 @@ export default function useFitness(userId, profileId) {
     return () => window.removeEventListener('fitness-updated', refresh)
   }, [profileId, reload])
   async function saveRoutine(raw) {
-    const routine = validateRoutine(raw)
-    const fields = { id: routine.id, user_id: userId, profile_id: profileId, name: routine.name, unit: routine.unit, notes: routine.notes, exercises: linkExercises(routine.exercises, movements) }
+    const routine = validateRoutine({ ...raw, unit: 'lb' })
+    const fields = { id: routine.id, user_id: userId, profile_id: profileId, name: routine.name, unit: routine.unit, notes: routine.notes, timer_order: routine.timer_order || 'sets', exercises: linkExercises(routine.exercises, movements) }
     const existing = routines.find(item => item.id === routine.id)
     const query = existing ? supabase.from('fitness_routines').update(fields).eq('id', routine.id).eq('profile_id', profileId).eq('updated_at', existing.updated_at) : supabase.from('fitness_routines').insert(fields)
     const saved = check(await query.select().single())
@@ -58,6 +58,11 @@ export default function useFitness(userId, profileId) {
     const saved = check(result)
     setSessions(current => [saved, ...current.filter(item => item.id !== saved.id)].sort((a, b) => b.performed_on.localeCompare(a.performed_on) || (b.completed_at || b.started_at).localeCompare(a.completed_at || a.started_at)))
     return saved
+  }
+  async function saveAdhoc(raw) {
+    const plan = validateRoutine({ ...raw, unit: 'lb' })
+    plan.exercises = linkExercises(plan.exercises, movements)
+    return saveSession(createAdhocSession(plan, sessions.filter(session => session.status === 'completed'), undefined, movements))
   }
   async function remove(kind, id) {
     const table = kind === 'routine' ? 'fitness_routines' : 'fitness_sessions'
@@ -92,5 +97,5 @@ export default function useFitness(userId, profileId) {
     check(await supabase.rpc('fitness_link_history', { p_profile: profileId, p_name: name, p_movement: movementId }))
     await reload()
   }
-  return { routines, sessions, profile, movements, createMovement, linkHistory, loading, error, reload, saveRoutine, saveSession, savePreferences, remove }
+  return { routines, sessions, profile, movements, createMovement, linkHistory, loading, error, reload, saveRoutine, saveAdhoc, saveSession, savePreferences, remove }
 }

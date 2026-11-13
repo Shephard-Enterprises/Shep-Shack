@@ -62,7 +62,7 @@ export function resolveMovement(name, library = BUILTIN_MOVEMENTS) {
 }
 export function movementFor(exercise, library = BUILTIN_MOVEMENTS) {
   const found = exercise.movement_id ? library.find(item => item.id === exercise.movement_id) : resolveMovement(exercise.name, library)
-  return found && found.mode === (exercise.mode || 'reps') ? found : null
+  return found && (exercise.movement_id || found.mode === (exercise.mode || 'reps')) ? found : null
 }
 export function movementIdentity(exercise, library = BUILTIN_MOVEMENTS) {
   return exercise.movement_id || movementFor(exercise, library)?.id || `legacy:${movementNameKey(exercise.name)}`
@@ -71,8 +71,7 @@ export function linkExercises(exercises, library = BUILTIN_MOVEMENTS) {
   return exercises.map(exercise => {
     const movement = movementFor(exercise, library)
     if (!movement) throw new Error(`Choose a specific movement from the library for “${exercise.name}”, or add it as a custom movement.`)
-    if (exercise.mode && exercise.mode !== movement.mode) throw new Error(`“${movement.name}” uses ${movement.mode === 'timed' ? 'time' : 'rep'} tracking. Choose its matching variation.`)
-    return { ...exercise, movement_id: movement.id, name: movement.name, mode: movement.mode }
+    return { ...exercise, movement_id: movement.id, name: movement.name, mode: exercise.mode || movement.mode }
   })
 }
 export function searchMovements(query, library = BUILTIN_MOVEMENTS, category = 'All') {
