@@ -40,7 +40,21 @@ test('fresh water does not hide an offline beer scale', async () => {
   assert.match(notices[0].title, /Beer keg sensor is offline/)
 })
 test('pour and refill notifications identify water separately from beer', async () => {
-  mockRest(() => [{ id: 1, scale_id: 'beer', ounces: 16 }, { id: 2, scale_id: 'sparkling-water', ounces: 16 }])
+  const eventTime = Date.now() - 180_000
+  mockRest(table => table === 'keg_scale_readings'
+    ? ['beer', 'sparkling-water'].flatMap(scale_id => [-180, -120, -60, 60, 120, 180].map(seconds => ({
+      scale_id, recorded_at: new Date(eventTime + seconds * 1000).toISOString(),
+      payload: { ready: true, beerOz: seconds < 0 ? 400 : 384 },
+    })))
+    : ['beer', 'sparkling-water'].map((scale_id, id) => ({ id, scale_id, ounces: 16, beer_oz_after: 384, poured_at: new Date(eventTime).toISOString() })))
   assert.deepEqual((await worker.collectKegPours()).map(row => row.title), ['Beer poured', 'Sparkling water poured'])
   assert.deepEqual((await worker.collectKegChanges()).map(row => row.url), ['/?page=keg&scale=beer', '/?page=keg&scale=sparkling-water'])
+})
+
+test('does not issue a pour notification when the weight rebounds', async () => {
+  const eventTime = Date.now() - 3 * 60_000
+  mockRest(table => table === 'keg_scale_readings'
+    ? [-180, -120, -60, 60, 120, 180].map(seconds => ({ scale_id: 'beer', recorded_at: new Date(eventTime + seconds * 1000).toISOString(), payload: { ready: true, beerOz: seconds === 60 ? 384 : 400 } }))
+    : [{ id: 1, scale_id: 'beer', ounces: 16, beer_oz_after: 384, poured_at: new Date(eventTime).toISOString() }])
+  assert.deepEqual(await worker.collectKegPours(), [])
 })

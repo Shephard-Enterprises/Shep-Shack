@@ -1,4 +1,4 @@
-import { isRecordedPour } from '../_shared/keg-pour-policy.js'
+import { isConfirmedPour } from '../_shared/keg-pour-policy.js'
 import webpush from 'npm:web-push@3.6.7'
 
 const PROJECT_URL = Deno.env.get('SUPABASE_URL')!
@@ -56,7 +56,10 @@ async function collectKeg(): Promise<Notice[]> {
 async function collectKegPours(): Promise<Notice[]> {
   const since = new Date(Date.now() - 10 * 60 * 1000).toISOString()
   const rows = await rest(`keg_scale_pours?select=id,scale_id,poured_at,ounces,beer_oz_after&poured_at=gte.${encodeURIComponent(since)}&order=poured_at.asc`)
-  return (rows ?? []).filter((pour: any) => isRecordedPour(Number(pour.ounces))).map((pour: any) => ({
+  if (!rows?.length) return []
+  const readingsSince = new Date(Date.now() - 14 * 60 * 1000).toISOString()
+  const readings = await rest(`keg_scale_readings?select=scale_id,recorded_at,payload&recorded_at=gte.${encodeURIComponent(readingsSince)}&order=recorded_at.asc`)
+  return rows.filter((pour: any) => isConfirmedPour(pour, readings ?? [])).map((pour: any) => ({
     key: `keg-pour:${pour.id}`,
     category: 'keg' as const,
     title: pour.scale_id === 'sparkling-water' ? 'Sparkling water poured' : 'Beer poured',

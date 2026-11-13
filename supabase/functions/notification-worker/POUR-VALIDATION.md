@@ -1,0 +1,9 @@
+# Pour alert confirmation
+
+On November 12, 2026, Beer event 377 reported 5.9 oz at 7:07:45 PM Pacific and generated an alert at 7:09 PM. The user confirmed nothing was poured. Minute readings went from roughly 243 oz before the event to 237 oz at the event, then 234, 233, 232, and 231 oz. The old confirmation predicate imposed an upper rebound limit but no lower bound, so continued downward drift could confirm a false event.
+
+The filter now requires three independent regular readings before the event and three minutes of stable follow-up readings close to the event's ending weight. Follow-up samples must be at least 45 seconds apart, span at least 120 seconds, reach at least 180 seconds after the event, and have no gap exceeding 90 seconds. The ending-weight tolerance is 10% of the reported pour, bounded to 1–2 oz, with a maximum 2 oz range across the settled readings. Starting readings must also span at least 90 seconds and stay within a 2 oz range. Other scales, event-triggered duplicates, and missing evidence cannot confirm a pour. Reboots, invalid/sensor-offline readings, refills, and intervening pours cancel confirmation.
+
+This deliberately delays alerts and may suppress rapid consecutive pours. It filters notifications only; raw readings and firmware-reported pour history are retained. Sustained physical load changes remain indistinguishable from actual liquid removal using weight alone. No recalibration, firmware flash, or changes to current keg levels are required for the notification fix.
+
+Regression tests include the actual event's timestamps and levels, continued decline, delayed drift, rebound, unstable baselines, duplicates, missing minutes, restart/sensor interruption, and stable genuine-pour fixtures. Deploy `notification-worker` after tests pass. Do not invoke the worker manually as a test: it can send unrelated household notifications.
