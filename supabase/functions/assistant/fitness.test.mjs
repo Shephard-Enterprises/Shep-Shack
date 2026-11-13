@@ -36,7 +36,7 @@ test('malformed, incomplete, or invalid plans are never accepted for saving', ()
   assert.throws(() => parseFitnessAnswer({}, JSON.stringify({ reply: 'Plan', workout: { ...workout, exercises: [{ ...workout.exercises[0], sets: 99 }] } })), /1–12/)
   assert.equal(parseFitnessAnswer({ output: [{ content: [{ type: 'refusal', refusal: 'Cannot help' }] }] }, '').workout, null)
 })
-function harness({ saveFails = false, answerWorkout = workout, saveAs = 'auto' } = {}) {
+function harness({ saveFails = false, answerWorkout = workout, saveAs = 'auto', message = 'Write and save my next workout' } = {}) {
   const calls = []
   const handler = createHandler({ env, fetchImpl: async (url, options = {}) => {
     const body = options.body ? JSON.parse(options.body) : null
@@ -53,7 +53,7 @@ function harness({ saveFails = false, answerWorkout = workout, saveAs = 'auto' }
     if (url === 'https://api.openai.com/v1/responses') return json({ status: 'completed', usage: { input_tokens: 1000, output_tokens: 500 }, output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify({ reply: 'Here is your plan.', workout: answerWorkout }) }] }] })
     throw new Error(`Unexpected request ${url}`)
   } })
-  return { calls, send: () => handler(new Request('https://edge.test', { method: 'POST', headers: { Authorization: 'Bearer session' }, body: JSON.stringify({ threadId, requestId, profileId, saveAs, message: 'Write and save my next workout' }) })) }
+  return { calls, send: () => handler(new Request('https://edge.test', { method: 'POST', headers: { Authorization: 'Bearer session' }, body: JSON.stringify({ threadId, requestId, profileId, saveAs, message }) })) }
 }
 test('Patty atomically saves the routine and answer to the selected profile, never a model-provided owner', async () => {
   const h = harness({ answerWorkout: { ...workout, profile_id: 'INJECTED', user_id: 'INJECTED' } })
@@ -138,4 +138,18 @@ test('generated movement repair accepts unique aliases and custom names, never f
   assert.throws(() => parse('Dumbbell triceps pushdown'), /No workout was saved/)
   assert.throws(() => parse('curls'), /No workout was saved/)
   assert.throws(() => parse('Cable triceps pushdown', []), /No workout was saved/)
+})
+
+
+test('dashboard questions with a selected training profile cannot create workouts', async () => {
+  const h = harness({ message: 'How do I use the radar on the Weather page?', answerWorkout: null })
+  const result = await (await h.send()).json()
+  assert.ok(result.messages)
+  const payload = h.calls.find(call => call.url === 'https://api.openai.com/v1/responses').body
+  assert.deepEqual(payload.text.format.schema.properties.workout, { type: 'null' })
+  assert.equal(h.calls.some(call => /assistant_finish_(fitness|adhoc)/.test(call.url)), false)
+  const unexpectedPlan = harness({ message: 'What is the weather?', answerWorkout: workout })
+  const rejected = await (await unexpectedPlan.send()).json()
+  assert.match(rejected.error, /No workout was saved/)
+  assert.equal(unexpectedPlan.calls.some(call => /assistant_finish_(fitness|adhoc)/.test(call.url)), false)
 })

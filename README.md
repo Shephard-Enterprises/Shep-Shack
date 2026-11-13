@@ -64,7 +64,7 @@ Raw keg readings and notification events are retained for 90 days. Pour and keg-
 
 ## App-wide assistant
 
-The signed-in dashboard includes an **Ask Patty** chat widget with private conversations, saved preferences, and a household monthly spending cap (default $5; $0 pauses chat). It needs an OpenAI API key stored in Supabase secrets, the assistant migration, and the `assistant` Edge Function deployment. See [assistant setup and spending controls](supabase/functions/assistant/README.md).
+The signed-in dashboard includes an **Ask Patty** chat widget that answers questions about Fitness, Weather, Safety, Flights, Sports, On Tap/Keg, and Settings. Relevant questions use server-loaded dashboard feed snapshots with availability and timestamps. It has private conversations, saved preferences, and a household monthly spending cap (default $5; $0 pauses chat). It needs an OpenAI API key stored in Supabase secrets, the assistant migration, and the `assistant` Edge Function deployment. See [assistant setup and spending controls](supabase/functions/assistant/README.md).
 
 ## Fitness
 

@@ -39,7 +39,7 @@ test('unauthenticated and removed household users cannot call the paid API', asy
 
 test('budget rejection prevents all paid requests', async () => {
   const h = harness({ reservationError: 'Monthly chat cap reached' })
-  const result = await h.send()
+  const result = await h.send({ message: 'What is the weather?' })
   assert.match((await result.json()).error, /cap reached/)
   assert.equal(h.calls.some(call => call.url.includes('api.openai.com')), false)
 })
