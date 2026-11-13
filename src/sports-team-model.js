@@ -14,10 +14,12 @@ export function nextGameLabel(event, now) {
 export function orderSportsTeams(rows, now) {
   const nextAt = row => Date.parse(row.next?.date ?? row.next?.gameDate ?? '')
   const soon = row => { const at = nextAt(row); return Number.isFinite(at) && at >= Number(now) && at - Number(now) < 14 * 86400_000 }
+  const scheduledLabel = row => !Number.isFinite(nextAt(row)) && Boolean(row.next?.dateLabel)
   return [...rows].sort((a, b) => {
     if (a.isLive !== b.isLive) return a.isLive ? -1 : 1
     if (soon(a) !== soon(b)) return soon(a) ? -1 : 1
     if (soon(a) && soon(b)) return nextAt(a) - nextAt(b)
+    if (scheduledLabel(a) !== scheduledLabel(b)) return scheduledLabel(a) ? -1 : 1
     return (Date.parse(b.gameDate) || 0) - (Date.parse(a.gameDate) || 0)
   })
 }

@@ -11,7 +11,7 @@ test('far-future games include the year; TBD games do not get a false countdown'
   assert.equal(nextGameLabel({ dateLabel: 'Fri, Nov 13 · 7 PM' }, now), 'Fri, Nov 13 · 7 PM')
 })
 test('sports prioritizes live and imminent games without mutating Home order', () => {
-  const rows = [{ key: 'offseason', gameDate: '2026-11-11' }, { key: 'next', next: { date: '2026-11-13T20:00:00Z' } }, { key: 'live', isLive: true }]
-  assert.deepEqual(orderSportsTeams(rows, now).map(row => row.key), ['live', 'next', 'offseason'])
-  assert.deepEqual(rows.map(row => row.key), ['offseason', 'next', 'live'])
+  const rows = [{ key: 'offseason', gameDate: '2026-11-11' }, { key: 'next', next: { date: '2026-11-13T20:00:00Z' } }, { key: 'live', isLive: true }, { key: 'gulls', next: { dateLabel: 'Fri, Nov 13' } }]
+  assert.deepEqual(orderSportsTeams(rows, now).map(row => row.key), ['live', 'next', 'gulls', 'offseason'])
+  assert.deepEqual(rows.map(row => row.key), ['offseason', 'next', 'live', 'gulls'])
 })
