@@ -45,6 +45,8 @@ Removing that row immediately removes the account's dashboard data access withou
 
 The Sports page loads Padres data from MLB Stats API and Wave, San Diego FC, and Ducks schedules and goal summaries from ESPN through the household-protected `sports` Edge Function. The Gulls' latest result and next game come from the official team schedule; its recap link provides goal details. Schedule feeds can have no upcoming game listed between seasons.
 
+Each team has a Team Hub with a season snapshot, available scoring leaders, recent results, published upcoming games, and club headlines. Official club feeds supply Padres, Wave, SDFC, and Gulls news; Ducks coverage and SDFC fallback news use team-tagged ESPN articles. Details load when a hub opens and are cached independently from the score feed. Dates and countdowns use Pacific time; missing feed dates never imply that a club has not announced its schedule. See [Sports coverage](supabase/functions/sports/README.md) for source and validation details.
+
 ## Supabase deployment
 
 The repository contains migrations and Edge Functions under `supabase/`. Apply migrations before deploying functions that depend on them:

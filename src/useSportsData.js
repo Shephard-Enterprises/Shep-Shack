@@ -51,6 +51,7 @@ export function usePadres({ enabled = true, intervalMs = 60_000, refreshKey = 0 
           setGame(null)
         }
 
+        let standingsSeason = Number(current?.season) || new Date().getFullYear()
         const recentStart = new Date()
         recentStart.setFullYear(recentStart.getFullYear() - 1)
         const yesterday = new Date()
@@ -62,6 +63,7 @@ export function usePadres({ enabled = true, intervalMs = 60_000, refreshKey = 0 
           const games = (recent.dates ?? []).flatMap(date => date.games ?? [])
           const latest = games.filter(item => item.status.abstractGameState === 'Final').at(-1)
           if (latest) {
+            standingsSeason = Number(latest.season) || standingsSeason
             const padresAway = latest.teams.away.team.id === 135
             const padresSide = padresAway ? latest.teams.away : latest.teams.home
             const opponentSide = padresAway ? latest.teams.home : latest.teams.away
@@ -82,7 +84,7 @@ export function usePadres({ enabled = true, intervalMs = 60_000, refreshKey = 0 
           }
         }
 
-        const season = new Date().getFullYear()
+        const season = standingsSeason
         const standingsResponse = await fetch(`https://statsapi.mlb.com/api/v1/standings?leagueId=104&season=${season}&standingsTypes=regularSeason`)
         if (standingsResponse.ok) {
           const standings = await standingsResponse.json()
@@ -90,6 +92,7 @@ export function usePadres({ enabled = true, intervalMs = 60_000, refreshKey = 0 
           const padresStanding = (standings.records ?? []).flatMap(record => record.teamRecords ?? []).find(team => team.team?.id === 135)
           if (padresStanding) {
             setStanding({
+              season,
               divisionRank: padresStanding.divisionRank,
               leagueRank: padresStanding.leagueRank,
               wildCardRank: padresStanding.wildCardRank,
@@ -103,25 +106,28 @@ export function usePadres({ enabled = true, intervalMs = 60_000, refreshKey = 0 
         const futureStart = new Date()
         futureStart.setDate(futureStart.getDate() + 1)
         const futureEnd = new Date()
-        futureEnd.setDate(futureEnd.getDate() + 14)
+        futureEnd.setDate(futureEnd.getDate() + 400)
         const futureResponse = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=135&startDate=${localDateStr(futureStart)}&endDate=${localDateStr(futureEnd)}`)
         if (futureResponse.ok) {
           const future = await futureResponse.json()
           if (cancelled) return
-          const upcoming = future.dates?.[0]?.games?.[0]
+          const upcoming = (future.dates ?? []).flatMap(date => date.games ?? [])
+            .filter(item => item.status.abstractGameState === 'Preview' && !/cancel|postpon/i.test(item.status.detailedState ?? '') && new Date(item.gameDate) > new Date())
+            .sort((a, b) => new Date(a.gameDate) - new Date(b.gameDate))[0]
           if (upcoming) {
             const padresAway = upcoming.teams.away.team.id === 135
             const padresSide = padresAway ? upcoming.teams.away : upcoming.teams.home
             const opponentSide = padresAway ? upcoming.teams.home : upcoming.teams.away
             setNextGame({
               gameDate: upcoming.gameDate,
+              timeTbd: upcoming.status.startTimeTBD === true,
               opponent: opponentSide.team.name,
               padresHome: !padresAway,
               venue: upcoming.venue?.name,
               wins: padresSide.leagueRecord?.wins,
               losses: padresSide.leagueRecord?.losses,
             })
-          }
+          } else setNextGame(null)
         }
 
         if (!cancelled) {

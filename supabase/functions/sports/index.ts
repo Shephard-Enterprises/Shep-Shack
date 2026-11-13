@@ -1,4 +1,6 @@
 import { isHouseholdMember } from '../_shared/household-auth.ts'
+import { parseSportsEvent as parseEvent } from './team-parsers.js'
+import { DETAIL_TEAMS, loadTeamDetails } from './team-details.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,25 +17,7 @@ const TEAMS = [
 const CACHE_TTL_MS = 60_000
 let cachedPayload: Record<string, unknown> | null = null
 let cachedAt = 0
-
-function parseEvent(event: any, teamId: string) {
-  const competition = event.competitions?.[0]
-  const competitors = competition?.competitors ?? []
-  const team = competitors.find((entry: any) => String(entry.team?.id) === teamId)
-  const opponent = competitors.find((entry: any) => String(entry.team?.id) !== teamId)
-  if (!team || !opponent) return null
-  return {
-    id: event.id, date: event.date,
-    state: competition.status?.type?.state ?? event.status?.type?.state,
-    status: competition.status?.type?.shortDetail ?? event.status?.type?.shortDetail ?? 'Scheduled',
-    home: team.homeAway === 'home',
-    score: team.score?.displayValue ?? team.score ?? null,
-    opponentScore: opponent.score?.displayValue ?? opponent.score ?? null,
-    opponent: opponent.team?.displayName ?? opponent.team?.name ?? 'Opponent',
-    opponentAbbr: opponent.team?.abbreviation ?? opponent.team?.displayName?.split(' ').pop()?.slice(0, 3).toUpperCase() ?? 'OPP',
-    venue: competition.venue?.fullName ?? null,
-  }
-}
+const detailCache = new Map<string, { payload: any; at: number }>()
 
 function parseGoalScorers(summary: any, teamId: string) {
   const plays = summary.keyEvents ?? summary.plays ?? []
@@ -99,6 +83,7 @@ function getGullsFinalScore(markup: string) {
 
 async function loadGulls() {
   const response = await fetch('https://www.sandiegogulls.com/schedule', {
+    signal: AbortSignal.timeout(12000),
     headers: { 'User-Agent': 'ShepShackDashboard/1.0 (sports scores)', Accept: 'text/html' },
   })
   if (!response.ok) throw new Error(`AHL schedule unavailable (${response.status})`)
@@ -141,6 +126,8 @@ async function loadGulls() {
     const timeLabel = upcomingEntry.match(/<span class="hour">\s*([^<]+)/i)?.[1]?.trim()
     if (opponent && venueLabel && dateLabel) {
       next = {
+        state: 'pre',
+        status: 'Scheduled',
         home: venueLabel.toLowerCase() === 'home',
         opponent,
         opponentAbbr: opponent.split(' ').pop()?.slice(0, 3).toUpperCase() ?? 'OPP',
@@ -165,6 +152,18 @@ Deno.serve(async request => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (request.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405, headers: corsHeaders })
   if (!(await isHouseholdMember(request))) return Response.json({ error: 'Household access required.' }, { status: 403, headers: corsHeaders })
+  const body = await request.json().catch(() => ({}))
+  if (body?.teamKey !== undefined) {
+    if (typeof body.teamKey !== 'string' || !Object.hasOwn(DETAIL_TEAMS, body.teamKey)) {
+      return Response.json({ error: 'Unknown team.' }, { status: 400, headers: corsHeaders })
+    }
+    const cached = detailCache.get(body.teamKey)
+    const ttl = cached && Object.keys(cached.payload.errors).length ? 60_000 : 10 * 60_000
+    if (cached && Date.now() - cached.at < ttl) return Response.json(cached.payload, { headers: corsHeaders })
+    const payload = await loadTeamDetails(body.teamKey, loadGulls)
+    detailCache.set(body.teamKey, { payload, at: Date.now() })
+    return Response.json(payload, { headers: { ...corsHeaders, 'Cache-Control': 'private, max-age=60' } })
+  }
   if (cachedPayload && Date.now() - cachedAt < CACHE_TTL_MS) {
     return Response.json(cachedPayload, { headers: { ...corsHeaders, 'Cache-Control': 'private, max-age=60' } })
   }

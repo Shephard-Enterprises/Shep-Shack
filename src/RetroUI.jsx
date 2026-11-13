@@ -2,6 +2,8 @@ import { useId, useRef, useState } from 'react'
 import { asset, environmentalStatus, flightPosition, kegLevel, number, summarySports } from './retro-model.mjs'
 import { PagedItems } from './ScreenDeck'
 import { aircraftArt } from './retro-aircraft.mjs'
+import SportsTeamHub from './SportsTeamHub'
+import { nextGameLabel, orderSportsTeams } from './sports-team-model'
 
 const timeOptions = { timeZone:'America/Los_Angeles',hour:'numeric',minute:'2-digit' }
 const integer = value => number(value)===null ? '—' : Math.round(value).toLocaleString()
@@ -106,16 +108,16 @@ export function RetroFlights({flightData,aircraftName,flightDistanceMi,flightRou
     <section className="retro-flight-detail" aria-label="Selected aircraft">{selected?<><div className="retro-flight-detail-heading"><div><p className="cardLabel">SELECTED AIRCRAFT</p><h2>{flightIdent(selected)}</h2></div><div>{[-1,1].map(step=><button key={step} disabled={visible.length<2} aria-label={step<0?'Previous aircraft':'Next aircraft'} onClick={()=>setSelectedHex(visible[(idx+step+visible.length)%visible.length].hex)}>{step<0?'←':'→'}</button>)}</div></div><p>{displayName(selected)}</p><small>{selected.route?.airline||'Operator not supplied'}</small><RetroAircraftArtwork code={selected.t} modelName={aircraftName(selected)}/><dl>{[['Route',flightRoute(selected)==='—'?'Not supplied':flightRoute(selected)],['Altitude',`${integer(selected.alt_baro)} ft`],['Distance',`${flightDistanceMi(selected)?.toFixed(1)??'—'} mi`],['Speed',`${integer(selected.gs)} kt`],['Heading',number(selected.track)===null?'—':`${Math.round(selected.track)}°`],['Registration',selected.r||'Not supplied']].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>{flightData.lastUpdated&&<p className="retro-radar-note">Updated {flightData.lastUpdated.toLocaleTimeString('en-US',timeOptions)} PT</p>}</>:<p className="retro-message">Select an aircraft to inspect.</p>}</section>
   </div></section>
 }
-export function RetroSports({padresData,sportsData,renderDetails}) {
+export function RetroSports({padresData,sportsData,renderDetails,now}) {
   const [filter,setFilter]=useState('all')
   const [selected,setSelected]=useState(null)
-  const detailDialog=useRef(null)
-  const rows=summarySports(padresData,sportsData).filter(row=>filter==='all'||(filter==='baseball'?row.league==='MLB':filter==='hockey'?['NHL','AHL'].includes(row.league):['MLS','NWSL'].includes(row.league)))
+  const allRows=orderSportsTeams(summarySports(padresData,sportsData),now)
+  const rows=allRows.filter(row=>filter==='all'||(filter==='baseball'?row.league==='MLB':filter==='hockey'?['NHL','AHL'].includes(row.league):['MLS','NWSL'].includes(row.league)))
   const played=row=>row.isLive?'LIVE NOW':row.gameDate?new Date(row.gameDate).toLocaleDateString('en-US',{timeZone:'America/Los_Angeles',month:'short',day:'numeric'}):row.gameDateLabel||'Latest result'
-  const kickoff=next=>next?.dateLabel||((next?.date||next?.gameDate)?new Date(next.date||next.gameDate).toLocaleString('en-US',{timeZone:'America/Los_Angeles',weekday:'short',hour:'numeric',minute:'2-digit'}):'Schedule not posted')
+  const selectedTeam=allRows.find(row=>row.key===selected?.key)??selected
+  if(selectedTeam) return <SportsTeamHub key={selectedTeam.key} team={selectedTeam} now={now} onBack={()=>setSelected(null)} renderDetails={renderDetails}/>
   return <section className="retro-sports-page"><div className="retro-sport-filters" role="group" aria-label="Filter teams">{['all','baseball','hockey','soccer'].map(value=><button key={value} aria-pressed={filter===value} onClick={()=>setFilter(value)}>{value==='all'?'ALL TEAMS':value.toUpperCase()}</button>)}</div><FeedMessage data={{loading:sportsData.loading&&padresData.loading,error:sportsData.error||padresData.error,lastUpdated:sportsData.lastUpdated||padresData.lastUpdated}}/>
-    <p className="sports-order-note">Live now, then most recent results · All times Pacific</p><div className="retro-score-headings"><span>HOME TEAMS</span><span>LATEST GAME</span><span>UP NEXT · PACIFIC</span></div>
-    <div className="retro-sports-rows">{rows.map(row=><article key={row.key} className={row.isLive?'is-live':''}><div className="retro-sport-row"><div className="retro-team">{row.logo&&<img src={row.logo} alt=""/>}<div><p>{row.league}</p><h2>{row.shortName}</h2></div></div><div className="retro-score"><span className="sport-played-date">{played(row)}</span><div><strong>{integer(row.score)}<i>–</i>{integer(row.opponentScore)}</strong><small>{row.error?'Last available result':row.status}</small></div><p>{row.opponent?`vs ${row.opponent}`:'No game result available'}</p></div><div className="retro-next"><span className="sport-next-label">UP NEXT</span><strong>{kickoff(row.next)}</strong><p>{row.next?.opponent||row.next?.opponentAbbr||'Opponent not posted'}</p></div></div><button className="retro-game-details" onClick={()=>{setSelected(row);detailDialog.current.showModal()}}>GAME DETAILS <span>↗</span></button></article>)}</div>
-    <dialog ref={detailDialog} className="retro-art-dialog retro-game-dialog"><button className="retro-dialog-close" onClick={()=>detailDialog.current.close()} aria-label="Close game details">×</button>{selected&&renderDetails(selected)}</dialog>
+    <p className="sports-order-note">Live & upcoming games first · Team hubs stay useful between seasons · All times Pacific</p><div className="retro-score-headings"><span>HOME TEAMS</span><span>LATEST GAME</span><span>UP NEXT · PACIFIC</span></div>
+    <div className="retro-sports-rows">{rows.map(row=><article key={row.key} className={row.isLive?'is-live':''}><div className="retro-sport-row"><div className="retro-team">{row.logo&&<img src={row.logo} alt=""/>}<div><p>{row.league}</p><h2>{row.shortName}</h2></div></div><div className="retro-score"><span className="sport-played-date">{played(row)}</span><div><strong>{integer(row.score)}<i>–</i>{integer(row.opponentScore)}</strong><small>{row.error?'Last available result':row.status}</small></div><p>{row.opponent?`vs ${row.opponent}`:'No game result available'}</p></div><div className="retro-next"><span className="sport-next-label">UP NEXT</span><strong>{nextGameLabel(row.next,now)}</strong>{row.next&&<p>{row.next.opponent||row.next.opponentAbbr}</p>}</div></div><button className="retro-game-details" onClick={()=>setSelected(row)}>TEAM HUB <span>↗</span></button></article>)}</div>
   </section>
 }

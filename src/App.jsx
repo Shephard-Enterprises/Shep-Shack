@@ -524,7 +524,7 @@ function Dashboard({ session }) {
       {activePage === 'weather' && <WeatherPage weatherData={weatherData} />}
       {activePage === 'fire' && <SafetyPage fireData={fireData} safetyData={safetyData} />}
       {activePage === 'flights' && <FlightsPage flightData={flightData} />}
-      {activePage === 'sports' && <SportsPage padresData={padresData} sportsData={sportsData} />}
+      {activePage === 'sports' && <SportsPage padresData={padresData} sportsData={sportsData} now={time} />}
       {activePage === 'keg' && <><div className="keg-scale-selector" role="group" aria-label="Select tap"><button aria-pressed={selectedScale==='sparkling-water'} onClick={()=>navigate('keg','sparkling-water')}>Sparkling Water</button><button aria-pressed={selectedScale==='beer'} onClick={()=>navigate('keg','beer')}>Beer</button></div><KegPage key={selectedScale} kegData={selectedScale==='beer'?kegData:waterKegData} /></>}
       {activePage === 'house' && <HousePage session={session} />}
       </div>
@@ -828,18 +828,18 @@ function TeamScoreCard({ team }) {
           <strong>{event.home ? 'vs' : '@'} {event.opponent}</strong>
         </div>
       )}
-      {event && (gameDate || event.dateLabel) && <div className="statusRow"><span>{hasScore ? 'Played' : 'Kickoff'}</span><strong>{event.dateLabel ?? `${gameDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · ${gameDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`}</strong></div>}
+      {event && (gameDate || event.dateLabel) && <div className="statusRow"><span>{hasScore ? 'Played' : 'Kickoff'}</span><strong>{event.dateLabel ?? `${gameDate.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric', weekday: 'short', month: 'short', day: 'numeric' })} · ${gameDate.toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit' })}`}</strong></div>}
       <div className="statusRow"><span>Record</span><strong>{team.record ?? '—'}</strong></div>
       {team.standing && <div className="statusRow"><span>Standing</span><strong>{team.standing}</strong></div>}
-      {team.next && hasScore && <div className="soccerUpcoming"><span>Up next</span><strong>{team.next.home ? 'vs' : '@'} {team.next.opponentAbbr}{team.next.dateLabel ? ` · ${team.next.dateLabel}` : team.next.date ? ` · ${new Date(team.next.date).toLocaleDateString([], { month: 'short', day: 'numeric' })} · ${new Date(team.next.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}</strong></div>}
-      {!team.next && team.latest && <div className="soccerUpcoming"><span>Next game</span><strong>Schedule not posted</strong></div>}
+      {team.next && hasScore && <div className="soccerUpcoming"><span>Up next</span><strong>{team.next.home ? 'vs' : '@'} {team.next.opponentAbbr}{team.next.dateLabel ? ` · ${team.next.dateLabel}` : team.next.date ? ` · ${new Date(team.next.date).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric', month: 'short', day: 'numeric' })} · ${new Date(team.next.date).toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit' })}` : ''}</strong></div>}
+      {!team.next && team.latest && <div className="soccerUpcoming"><span>Next game</span><strong>No upcoming game in this feed</strong></div>}
     </div>
   )
 }
 
 function PadresScoreCard({ padresData }) {
   const { game, latestGame, nextGame, standing, loading, error } = padresData
-  const scoreGame = game?.state !== 'Preview' ? game : latestGame
+  const scoreGame = game && game.state !== 'Preview' ? game : latestGame
   const event = scoreGame ?? game ?? nextGame
   const upcomingGame = game?.state === 'Preview' ? game : nextGame
   const isLive = game?.state === 'Live'
@@ -866,22 +866,22 @@ function PadresScoreCard({ padresData }) {
       {event && !hasScore && (
         <div className="soccerNext"><span>Next game</span><strong>{event.padresHome ? 'vs' : '@'} {event.opponent}</strong></div>
       )}
-      {event && gameDate && <div className="statusRow"><span>{hasScore ? 'Played' : 'First pitch'}</span><strong>{gameDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · {gameDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</strong></div>}
+      {event && gameDate && <div className="statusRow"><span>{hasScore ? 'Played' : 'First pitch'}</span><strong>{gameDate.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric', weekday: 'short', month: 'short', day: 'numeric' })} · {gameDate.toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit' })}</strong></div>}
       <div className="statusRow"><span>Record</span><strong>{standing ? `${standing.wins}–${standing.losses}` : '—'}</strong></div>
       <div className="statusRow"><span>NL West</span><strong>{standing?.divisionRank ? `#${standing.divisionRank}${standing.gamesBack && standing.gamesBack !== '-' ? ` · ${standing.gamesBack} GB` : ''}` : '—'}</strong></div>
       <div className="statusRow"><span>National League</span><strong>{standing?.leagueRank ? `#${standing.leagueRank}` : '—'}</strong></div>
       {standing?.wildCardRank && <div className="statusRow"><span>Wild Card</span><strong>#{standing.wildCardRank}</strong></div>}
       {previousGame && <div className="sportsPreviousResult">
-        <span>Previous · {new Date(previousGame.gameDate).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+        <span>Previous · {new Date(previousGame.gameDate).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric', month: 'short', day: 'numeric' })}</span>
         <strong>SD {previousGame.padresScore}–{previousGame.opponentScore} {teamAbbr(previousGame.opponent)}</strong>
       </div>}
-      {upcomingGame && <div className="soccerUpcoming"><span>Next game</span><strong>{upcomingGame.padresHome ? 'vs' : '@'} {teamAbbr(upcomingGame.opponent)} · {new Date(upcomingGame.gameDate).toLocaleDateString([], { month: 'short', day: 'numeric' })} · {new Date(upcomingGame.gameDate).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</strong></div>}
+      {upcomingGame && <div className="soccerUpcoming"><span>Next game</span><strong>{upcomingGame.padresHome ? 'vs' : '@'} {teamAbbr(upcomingGame.opponent)} · {new Date(upcomingGame.gameDate).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric', month: 'short', day: 'numeric' })} · {new Date(upcomingGame.gameDate).toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit' })}</strong></div>}
     </div>
   )
 }
 
-function SportsPage({ padresData, sportsData }) {
-  return <RetroSports padresData={padresData} sportsData={sportsData} renderDetails={row=>row.key==='padres'?<PadresScoreCard padresData={padresData}/>:<TeamScoreCard team={row}/>} />
+function SportsPage({ padresData, sportsData, now }) {
+  return <RetroSports padresData={padresData} sportsData={sportsData} now={now} renderDetails={row=>row.key==='padres'?<PadresScoreCard padresData={padresData}/>:<TeamScoreCard team={row}/>} />
 }
 
 function WeatherRadar({ hourly }) {
