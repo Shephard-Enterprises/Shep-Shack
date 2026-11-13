@@ -15,6 +15,9 @@ import { useNetworkStatus } from './useNetworkStatus'
 import { usePadres, useSportsScores } from './useSportsData'
 import { useWeather } from './useWeather'
 import NotificationControl from './NotificationControl'
+import AssistantWidget from './AssistantWidget'
+import FitnessPage from './FitnessPage'
+import { FITNESS_PROFILES } from './fitness-model.mjs'
 
 // Public, approximate city-center coordinates. Precise household coordinates stay server-side.
 const SANTEE = { lat: 32.8384, lon: -116.9739 }
@@ -241,6 +244,7 @@ const pages = [
   { id: 'flights', label: 'Flights', icon: 'flights' },
   { id: 'sports', label: 'Sports', icon: 'sports' },
   { id: 'keg', label: 'Keg', icon: 'keg' },
+  { id: 'fitness', label: 'Fitness', icon: 'fitness' },
   { id: 'house', label: 'Settings', icon: 'settings' },
 ]
 
@@ -254,6 +258,7 @@ function NavIcon({ name }) {
     baseball: <><circle cx="12" cy="12" r="9"/><path d="M7.2 4.5c1.3 1.4 1.8 3 1.7 4.8M4.5 7.2c1.4.5 2.8 1.4 4.1 2.7M16.8 19.5c-1.3-1.4-1.8-3-1.7-4.8M19.5 16.8c-1.4-.5-2.8-1.4-4.1-2.7"/></>,
     sports: <><path d="M8 4h8v3.5a4 4 0 0 1-8 0zM10 12v3M14 12v3M8 19h8M10 15h4v4"/><path d="M8 6H4v1.5A3.5 3.5 0 0 0 7.5 11M16 6h4v1.5a3.5 3.5 0 0 1-3.5 3.5"/></>,
     keg: <><path d="M7 3h10l1 4-1 14H7L6 7z"/><path d="M6 7h12M8 11h8M9 3V1h6v2"/></>,
+    fitness: <><path d="m6 5-3 3 13 13 3-3M3 5l2-2 16 16-2 2M14 3l7 7M3 14l7 7"/><path d="m8 15 7-7"/></>,
     settings: <><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6"/><circle cx="14" cy="7" r="2"/><circle cx="6" cy="17" r="2"/></>,
     more: <><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></>,
   }
@@ -287,7 +292,7 @@ function App() {
   if (recoveringPassword && session) return <PasswordResetPage onComplete={() => setRecoveringPassword(false)} />
   if (!session) return <LoginPage />
 
-  return <Dashboard session={session} />
+  return <Dashboard key={session.user.id} session={session} />
 }
 
 function LoginPage() {
@@ -370,6 +375,17 @@ function PasswordResetPage({ onComplete }) {
 }
 
 function Dashboard({ session }) {
+  const [openedFitnessRoutine, setOpenedFitnessRoutine] = useState(null)
+  const [fitnessProfileId, setFitnessProfileId] = useState(() => {
+    try { const saved = localStorage.getItem(`shep-fitness-profile:${session.user.id}`); return FITNESS_PROFILES.some(profile => profile.id === saved) ? saved : FITNESS_PROFILES[0].id }
+    catch { return FITNESS_PROFILES[0].id }
+  })
+  const changeFitnessProfile = id => {
+    if (!FITNESS_PROFILES.some(profile => profile.id === id)) return
+    setFitnessProfileId(id)
+    try { localStorage.setItem(`shep-fitness-profile:${session.user.id}`, id) } catch { /* Profile selection still works for this visit. */ }
+  }
+
   const [time, setTime] = useState(new Date())
   const [headerCompact, setHeaderCompact] = useState(false)
   const [pullDistance, setPullDistance] = useState(0)
@@ -526,8 +542,10 @@ function Dashboard({ session }) {
       {activePage === 'flights' && <FlightsPage flightData={flightData} />}
       {activePage === 'sports' && <SportsPage padresData={padresData} sportsData={sportsData} now={time} />}
       {activePage === 'keg' && <><div className="keg-scale-selector" role="group" aria-label="Select tap"><button aria-pressed={selectedScale==='sparkling-water'} onClick={()=>navigate('keg','sparkling-water')}>Sparkling Water</button><button aria-pressed={selectedScale==='beer'} onClick={()=>navigate('keg','beer')}>Beer</button></div><KegPage key={selectedScale} kegData={selectedScale==='beer'?kegData:waterKegData} /></>}
+      {activePage === 'fitness' && <FitnessPage key={openedFitnessRoutine || 'fitness'} userId={session.user.id} profileId={fitnessProfileId} onProfileChange={changeFitnessProfile} />}
       {activePage === 'house' && <HousePage session={session} />}
       </div>
+      <AssistantWidget key={session.user.id} userId={session.user.id} page={activePage} profileId={fitnessProfileId} onProfileChange={changeFitnessProfile} onOpenFitness={(id, routineId) => { changeFitnessProfile(id); setOpenedFitnessRoutine(routineId); navigate('fitness') }} />
     </main>
   )
 }

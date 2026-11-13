@@ -61,3 +61,27 @@ Private Edge Function secrets belong in Supabase project secrets. ESP32 Wi-Fi an
 ## Data retention
 
 Raw keg readings and notification events are retained for 90 days. Pour and keg-change records remain available for long-term dashboard analytics.
+
+## App-wide assistant
+
+The signed-in dashboard includes an **Ask Patty** chat widget with private conversations, saved preferences, and a household monthly spending cap (default $5; $0 pauses chat). It needs an OpenAI API key stored in Supabase secrets, the assistant migration, and the `assistant` Edge Function deployment. See [assistant setup and spending controls](supabase/functions/assistant/README.md).
+
+## Fitness
+
+The **Fitness** destination has Justin and Rosy profile tabs. Each profile has its own training preferences, routines, active workout, completed strength sessions, cardio events, and progress. Save goals, equipment, and schedule in the training-preferences panel so Patty can tailor generated routines for that person. Household members can view and manage both profiles; these are training profiles inside the household, not separate sign-in accounts.
+
+Apply `supabase/migrations/20261113020000_fitness.sql` before using Fitness. The section works independently of the AI key. Routines can be entered manually or pasted in the explicit `Exercise | sets | rep target | rest seconds` format. Start a routine, log weight and reps, check completed sets, and finish the session. Unsynced draft changes are kept on that device; **Save draft** syncs them to Supabase. Drafts are excluded from progress. Cardio records duration, optional distance, units, notes, and derived pace.
+
+Patty uses the same selected profile shown in Fitness. Asking her to write a workout can save a validated strength routine directly into that profile. She receives server-generated summaries of that profile's completed strength/cardio history to answer progress questions. AI generation requires the assistant function, both migrations, and the OpenAI key described above. Her workout save and chat answer commit together. Generated routines are plans, never completed sessions. Cardio events are entered in the Cardio view.
+
+Progress compares top weight, most reps, and total weight × reps per movement, converting lb/kg for comparisons. Exercise names are matched after ignoring capitalization and extra spaces; use consistent movement names for useful charts. It displays all-history tables and the last 24 session points in each chart. No body-weight measurements or wearable synchronization are included in this version.
+
+Timed exercises use **Time** tracking with a target in seconds. Each set has a countdown with pause/resume/reset; **Record** fills actual seconds, and the user explicitly checks the set complete. Weight is optional for timed sets. Timer deadlines are saved with workout drafts so elapsed time stays accurate when returning to the page; they do not provide background notifications. History and progress show completed duration separately from lifting reps/volume. Pasted routines accept targets such as `Plank | 3 | 45s | 30`. Apply `20261113030000_fitness_timed_sets.sql` alongside the earlier Fitness migrations. Patty can generate timed sets and includes an **Open in Fitness** button on saved workouts.
+
+### Shared movement library
+
+Manual and Patty-created plans select the same stable movement IDs. The **Movements** view includes 50 built-in movements, searchable by name, alias, muscle group, or equipment. Add a custom movement directly from the manual routine builder. **Save & start workout** begins logging immediately; the AI key is not needed for manual tracking.
+
+Progress and previous-weight suggestions follow the movement across different routines within the selected training profile. For example, `DB curls` and `Dumbbell curl` link to **Dumbbell curl**; **Barbell curl** and **Dumbbell hammer curl** have separate histories. Pounds and kilograms are converted for comparison. For dumbbell exercises, log the weight of one dumbbell consistently.
+
+Apply `20261113040000_movement_library.sql` after the earlier Fitness migrations. It backfills unambiguous historical names and aliases. Generic names such as `curls` remain unlinked rather than guessing equipment; use **Movements → Link older movement names** to choose the correct variation for that profile. Finish or discard an active workout before linking older history. Custom library entries are shared across household profiles, while workout results and charts remain scoped to Justin or Rosy. Patty receives the available IDs and validates generated exercises against this same library before saving.

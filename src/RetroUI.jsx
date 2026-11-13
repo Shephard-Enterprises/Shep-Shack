@@ -80,7 +80,7 @@ export function RetroHome({now,onNavigate,flightData,fireData,safetyData,padresD
         <div><span>Latest earthquake</span><strong>{safetyReading(safetyData,latestQuake?`M ${latestQuake.magnitude?.toFixed(1)??'—'} · ${integer(latestQuake.distMi)} mi`:'None in past 7 days')}</strong></div>
       </div><p className="retro-tile-note">LOCAL CONDITIONS <span>MAP & DETAILS ↗</span></p></article>
     </section>
-    <div className="retro-home-extras"><button onClick={()=>onNavigate('weather')}>{weatherData.loading?'Weather loading…':weatherData.error?'Weather unavailable':weatherData.weather?`${weatherData.weather.temp}° · ${weatherData.weather.description}`:'Weather'} ↗</button><button onClick={()=>onNavigate('house')}>SETTINGS & NOTIFICATIONS ↗</button></div>
+    <div className="retro-home-extras"><button onClick={()=>onNavigate('weather')}>{weatherData.loading?'Weather loading…':weatherData.error?'Weather unavailable':weatherData.weather?`${weatherData.weather.temp}° · ${weatherData.weather.description}`:'Weather'} ↗</button><button onClick={()=>onNavigate('fitness')}>FITNESS & TRAINING ↗</button><button onClick={()=>onNavigate('house')}>SETTINGS & NOTIFICATIONS ↗</button></div>
   </div>
 }
 export function RetroAircraftArtwork({code,modelName}) {
