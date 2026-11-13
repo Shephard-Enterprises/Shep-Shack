@@ -12,15 +12,20 @@ globalThis.Deno = {
   serve: callback => { handler = callback },
 }
 let code = stripTypeScriptTypes(await readFile(new URL('./index.ts', import.meta.url), 'utf8'))
-for (const filename of ['keg-scale-policy.js', 'keg-pour-policy.js']) {
+for (const filename of ['keg-scale-policy.js', 'keg-pour-policy.js', 'keg-name-policy.js']) {
   code = code.replace(`../_shared/${filename}`, new URL(`../_shared/${filename}`, import.meta.url).href)
 }
 await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`)
 test.after(() => { globalThis.fetch = originalFetch; globalThis.Deno = originalDeno })
 
-async function upload(payload, secret = 'test-only') {
+async function upload(payload, secret = 'test-only', settings = [{ display_name: 'House IPA' }]) {
   const writes = []
   globalThis.fetch = async (url, init) => {
+    if (new URL(url).pathname.endsWith('/keg_scale_settings')) {
+      assert.equal(new URL(url).searchParams.get('scale_id'), `eq.${resolveScaleId(payload)}`)
+      if (settings instanceof Error) throw settings
+      return new Response(JSON.stringify(settings), { status: 200 })
+    }
     writes.push({ table: new URL(url).pathname.split('/').at(-1), body: JSON.parse(init.body) })
     return new Response(JSON.stringify(writes.length === 1 ? [{ id: 101 }] : null), { status: 201 })
   }
@@ -64,5 +69,24 @@ test('bad credentials, unknown scales and arrays cannot write readings', async (
     const { response, writes } = await upload(payload, secret)
     assert.equal(response.status, status)
     assert.equal(writes.length, 0)
+  }
+})
+
+test('cloud setting is authoritative over the name sent by a device', async () => {
+  const { response, writes } = await upload({ scaleId: 'beer', kegName: 'Old beer' })
+  assert.equal(response.headers.get('X-Keg-Name'), 'House IPA')
+  // Retain the reported name as the display's acknowledgement.
+  assert.equal(writes[0].body.payload.kegName, 'Old beer')
+})
+test('water gets its own name even when named like a beer', async () => {
+  const { response } = await upload({ scaleId: 'sparkling-water' }, 'test-only', [{ display_name: 'Lemon fizz' }])
+  assert.equal(response.headers.get('X-Keg-Name'), 'Lemon fizz')
+})
+test('missing, invalid, or unavailable settings never interrupt readings or replace the device name', async () => {
+  for (const setting of [[], [{ display_name: 'Bad\nheader' }], new Error('Unavailable')]) {
+    const { response, writes } = await upload({ scaleId: 'beer' }, 'test-only', setting)
+    assert.equal(response.status, 201)
+    assert.equal(response.headers.get('X-Keg-Name'), null)
+    assert.equal(writes.length, 1)
   }
 })

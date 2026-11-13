@@ -1,0 +1,74 @@
+--- a/keg_scale_wifi.ino
++++ b/keg_scale_wifi.ino
+@@ -13,6 +13,7 @@
+ #include "boxer_empty.h"
+ #include "KegPourDetector.h"
+ #include "KegPourDiagnostics.h"
++#include "KegNameSettings.h"
+ 
+ #define HX711_DT   27
+ #define HX711_SCK  22
+@@ -158,6 +159,7 @@
+ Preferences prefs;
+ KegPourDetector pourDetector;
+ KegPourDiagnostics pourDiagnostics;
++KegNameSettings tapName("Shep Shack Tap");
+ 
+ unsigned long lastUpdate = 0;
+ unsigned long lastCloudUploadAttempt = 0;
+@@ -283,6 +285,7 @@
+ 
+ void loadSavedSettings() {
+   prefs.begin("kegscale", true);
++  tapName.load(prefs);
+ 
+   calibrationFactor = prefs.getFloat("cal", DEFAULT_CALIBRATION_FACTOR);
+   tareOffset = prefs.getLong("tare", 0);
+@@ -421,7 +424,8 @@
+   lcd.setTextColor(text, bg);
+   lcd.setTextSize(2);
+   lcd.setCursor(10, 8);
+-  lcd.print("Shep Shack Tap");
++  if (lcd.textWidth(tapName.value()) > 300) lcd.setTextSize(1);
++  lcd.print(tapName.value());
+ 
+   lcd.setTextSize(1);
+   lcd.setTextColor(muted, bg);
+@@ -560,7 +564,8 @@
+ 
+ String buildKegJson(float pourOz = 0.0, bool freshKeg = false, bool emptyKeg = false) {
+   String json = "{";
+-  json += "\"kegName\":\"Shep Shack Tap\",";
++  json += "\"scaleId\":\"beer\",";
++  json += "\"kegName\":" + tapName.json() + ",";
+   json += "\"ready\":" + String((hxReady && hasSavedTare) ? "true" : "false") + ",";
+   json += "\"hxReady\":" + String(hxReady ? "true" : "false") + ",";
+   json += "\"hasSavedTare\":" + String(hasSavedTare ? "true" : "false") + ",";
+@@ -607,11 +612,27 @@
+   http.addHeader("Content-Type", "application/json");
+   http.addHeader("x-keg-secret", KEG_INGEST_SECRET_VALUE);
+ 
++  const char *responseHeaders[] = {"X-Keg-Name"};
++  http.collectHeaders(responseHeaders, 1);
+   int status = http.POST(buildKegJson(pourOz, freshKeg, emptyKeg));
++  String cloudName = http.header("X-Keg-Name");
+   http.end();
+ 
+   if (status >= 200 && status < 300) {
+     Serial.println("Supabase: keg reading uploaded");
++    if (tapName.apply(cloudName, "kegscale")) {
++      Serial.println("Tap name updated from cloud settings.");
++      if (screenMode == SCREEN_NORMAL) {
++        // Redraw the label without resetting pour detection or scale state.
++        lcd.fillRect(10, 8, 300, 20, bg);
++        lcd.setTextColor(text, bg);
++        lcd.setTextSize(2);
++        if (lcd.textWidth(tapName.value()) > 300) lcd.setTextSize(1);
++        lcd.setCursor(10, 8);
++        lcd.print(tapName.value());
++      }
++      forceUpdate = true;
++    }
+   } else {
+     Serial.print("Supabase upload failed, HTTP ");
+     Serial.println(status);

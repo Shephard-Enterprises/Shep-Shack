@@ -5,6 +5,7 @@ import './App.css'
 import './Retro.css'
 import { RetroHeader, RetroHome, RetroFlights, RetroKegGauge, RetroSports } from './RetroUI'
 import ScreenDeck, { PagedItems } from './ScreenDeck'
+import KegNameEditor from './KegNameEditor'
 import { kegLevel } from './retro-model.mjs'
 import { supabase } from './supabase'
 import { useFireWatch } from './useFireWatch'
@@ -1221,11 +1222,11 @@ function KegPage({ kegData }) {
           <div>
             <p className="cardLabel">Keg command</p>
             <h2>
-              {loading
+              {kegData.displayName ?? (loading
                 ? 'Loading…'
                 : error
                 ? 'Unavailable'
-                : keg?.kegName ?? (isWater ? 'Sparkling Water' : 'Shep Shack Tap')}
+                : keg?.kegName ?? (isWater ? 'Sparkling Water' : 'Shep Shack Tap'))}
             </h2>
           </div>
           {lastUpdated && (
@@ -1233,6 +1234,7 @@ function KegPage({ kegData }) {
           )}
         </div>
 
+        <KegNameEditor data={kegData} />
         <div className="kegHeroBody">
           <div className="retro-keg-hero-gauge"><RetroKegGauge level={loading||error?null:kegLevel(keg)} liquid={isWater?'water':'beer'}/><strong>{loading||error||kegLevel(keg)===null?'—':`${kegLevel(keg)}%`}</strong></div>
 

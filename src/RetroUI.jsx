@@ -33,7 +33,7 @@ function HomeKegTap({ data = {}, label, scaleId, liquid, now, onNavigate }) {
   const status = data.loading ? 'Checking…' : data.error ? 'Unavailable' : stale ? 'Stale reading' : !data.keg ? 'Awaiting scale' : data.keg.ready ? 'Ready' : 'Not ready'
   const pours = level === null ? null : number(data.keg?.pintsLeft)
   return <button className={`home-keg-tap ${liquid}`} onClick={() => onNavigate('keg', scaleId)} aria-label={`Open ${label} keg`}>
-    <span className="home-keg-heading"><span className="home-keg-tap-number">{liquid === 'water' ? 'TAP 01' : 'TAP 02'}</span><span className="home-keg-label">{label}</span></span>
+    <span className="home-keg-heading"><span className="home-keg-tap-number">{liquid === 'water' ? 'TAP 01' : 'TAP 02'}</span><span className="home-keg-label">{data.displayName ?? label}</span></span>
     <span className="home-keg-art"><RetroKegGauge level={level} liquid={liquid} small/></span>
     <strong className="home-keg-percent">{level ?? '—'}{level !== null && <small>%</small>}</strong>
     <span className="home-keg-volume" title={liquid === 'water' ? '16 oz per pour' : undefined}><b>{pours === null ? '—' : pours.toFixed(1)}</b><span>{liquid === 'water' ? 'pours left' : 'pints left'}</span></span>

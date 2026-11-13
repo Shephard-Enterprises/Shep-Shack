@@ -1,5 +1,6 @@
 import { resolveScaleId } from '../_shared/keg-scale-policy.js'
 import { isRecordedPour } from '../_shared/keg-pour-policy.js'
+import { validKegName } from '../_shared/keg-name-policy.js'
 
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'content-type, x-keg-secret', 'Access-Control-Allow-Methods': 'POST, OPTIONS' }
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -50,5 +51,19 @@ Deno.serve(async request => {
     if (!changeResponse.ok) return json({ error: 'Reading saved, but fresh-keg event failed' }, 502)
   }
 
-  return json({ ok: true, scaleId, pourRecorded: isRecordedPour(pourOz), freshKegRecorded: eventType === 'freshKeg' }, 201)
+  // The device reports its current name in readings; only this household-owned
+  // setting can change it. A settings outage must not interrupt scale uploads.
+  let kegName: string | null = null
+  try {
+    const settings = await fetch(`${url}/rest/v1/keg_scale_settings?scale_id=eq.${scaleId}&select=display_name`, {
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+    })
+    if (settings.ok) {
+      const [setting] = await settings.json()
+      if (validKegName(setting?.display_name)) kegName = setting.display_name
+    }
+  } catch { /* Retain the device's saved name until the next successful upload. */ }
+  const result = json({ ok: true, scaleId, pourRecorded: isRecordedPour(pourOz), freshKegRecorded: eventType === 'freshKeg' }, 201)
+  if (kegName) result.headers.set('X-Keg-Name', kegName)
+  return result
 })

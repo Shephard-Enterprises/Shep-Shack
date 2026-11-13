@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase'
+import { validKegName } from '../supabase/functions/_shared/keg-name-policy.js'
 
 function normalizeKegPercent(payload, readingAt, kegChange) {
   const rawPercent = Number(payload?.percent)
@@ -22,9 +23,27 @@ export function useKegStatus({ scaleId = 'beer', enabled = true, includeHistory 
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState(null)
+  const [checkedAt, setCheckedAt] = useState(null)
   const [history, setHistory] = useState([])
   const [pours, setPours] = useState([])
   const [latestKegChange, setLatestKegChange] = useState(null)
+  const [displayName, setDisplayName] = useState(null)
+  const [nameError, setNameError] = useState(null)
+  const nameRevision = useRef(0)
+
+  async function saveName(value) {
+    const name = value.trim()
+    if (!validKegName(name)) throw new Error('Use 1–32 characters: letters, numbers, spaces, or basic punctuation.')
+    // Invalidate any settings read that started before this edit.
+    nameRevision.current++
+    const { data, error } = await supabase.from('keg_scale_settings')
+      .update({ display_name: name }).eq('scale_id', scaleId).select('display_name').single()
+    if (error) throw new Error(error.message)
+    nameRevision.current++
+    setDisplayName(data.display_name)
+    setNameError(null)
+    return data.display_name
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -32,6 +51,7 @@ export function useKegStatus({ scaleId = 'beer', enabled = true, includeHistory 
     async function load() {
       if (!enabled || inFlight || document.visibilityState === 'hidden') return
       inFlight = true
+      const revision = nameRevision.current
       const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
       const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
       try {
@@ -41,10 +61,16 @@ export function useKegStatus({ scaleId = 'beer', enabled = true, includeHistory 
           supabase.from('keg_scale_readings').select('payload, recorded_at').eq('scale_id', scaleId).gte('recorded_at', since24h).order('recorded_at', { ascending: true }).limit(1500),
           supabase.from('keg_scale_pours').select('id,poured_at,ounces,beer_oz_after').eq('scale_id', scaleId).gte('poured_at', since30d).order('poured_at', { ascending: false }).limit(500),
         ] : []
-        const [{ data, error: dbError }, { data: kegChange, error: changeError }, ...details] = await Promise.all([latestRequest, kegChangeRequest, ...detailRequests])
+        const nameRequest = supabase.from('keg_scale_settings').select('display_name').eq('scale_id', scaleId).single()
+        const [{ data, error: dbError }, { data: kegChange, error: changeError }, nameResult, ...details] = await Promise.all([latestRequest, kegChangeRequest, nameRequest, ...detailRequests])
         if (cancelled) return
+        if (revision === nameRevision.current) {
+          if (nameResult.error) setNameError('Could not load the saved tap name. Try again shortly.')
+          else { setDisplayName(nameResult.data.display_name); setNameError(null) }
+        }
         const failure = dbError || changeError || details.find(result => result.error)?.error
         if (failure) throw new Error(failure.message)
+        setCheckedAt(Date.now())
         if (data) {
           const readingAt = new Date(data.recorded_at)
           setKeg(normalizeKegPercent(data.payload, readingAt, kegChange)); setLastUpdated(readingAt); setError(null)
@@ -68,5 +94,7 @@ export function useKegStatus({ scaleId = 'beer', enabled = true, includeHistory 
     document.addEventListener('visibilitychange', onVisible)
     return () => { cancelled = true; clearInterval(id); document.removeEventListener('visibilitychange', onVisible) }
   }, [scaleId, enabled, includeHistory, intervalMs, refreshKey])
-  return { scaleId, keg, history, pours, latestKegChange, error, loading, lastUpdated }
+  return { scaleId, keg: keg ? { ...keg, kegName: displayName ?? keg.kegName } : null,
+    displayName, deviceName: keg?.kegName, nameError, saveName, checkedAt,
+    history, pours, latestKegChange, error, loading, lastUpdated }
 }

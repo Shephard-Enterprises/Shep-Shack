@@ -294,3 +294,18 @@ html,body,#root{height:auto;max-height:none;overflow:visible}
   .retro-app .kegPage .kegPints span { font-size: 11px; white-space: nowrap; }
   .retro-app .screen-deck-content .kegStats .statusRow { padding: 12px 0; font-size: 13px; }
 }
+
+.keg-name-editor { margin-top: 12px; }
+.keg-name-editor form { display: grid; gap: 8px; }
+.keg-name-editor label { font-size: 13px; color: var(--cream); }
+.keg-name-editor input { width: 100%; box-sizing: border-box; min-height: 44px; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: #08191b; color: var(--cream); font-size: 16px; }
+.keg-name-editor button { min-height: 36px; padding: 7px 12px; border: 1px solid var(--border); border-radius: 6px; color: var(--cream); background: #10262a; cursor: pointer; }
+.keg-name-editor button:disabled { opacity: .6; cursor: default; }
+.keg-name-actions { display: flex; gap: 8px; }
+.keg-name-actions button[type=submit] { border-color: var(--teal); }
+.keg-name-editor p { margin: 8px 0 0; font-size: 12px; color: #adc2b9; }
+.keg-name-editor small { display: block; font-size: 11px; line-height: 1.4; color: #adc2b9; }
+.keg-name-editor [role=alert] { color: #ffc28a; }
+.keg-name-dialog { width: min(420px, calc(100vw - 40px)); max-height: 80dvh; box-sizing: border-box; overflow: auto; padding: 24px; border: 1px solid var(--border); border-radius: 14px; background: #0b1d20; color: var(--cream); }
+.keg-name-dialog::backdrop { background: #000a; }
+.retro-app .kegPage .kegHero h2, .home-keg-label { overflow-wrap: anywhere; }
