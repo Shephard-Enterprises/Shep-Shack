@@ -1215,7 +1215,7 @@ function KegPage({ kegData }) {
     : 'The tap is giving thoughts and prayers.'
 
   return (
-    <ScreenDeck className="kegPage" groups={[{label:'On tap',classes:['kegHero','kegStats','kegStatus']},{label:'Analytics',types:[KegHistory]}]}>
+    <ScreenDeck className="kegPage" groups={[{label:'On tap',classes:['kegHero','kegStats']},{label:'Analytics',types:[KegHistory]}]}>
       <div className="card wideCard accent-keg kegHero">
         <div className="cardHeaderRow">
           <div>
@@ -1281,23 +1281,6 @@ function KegPage({ kegData }) {
             Keg sensor unavailable: {error}
           </p>
         )}
-      </div>
-
-      <div className="card accent-keg kegStatus">
-        <p className="cardLabel">Tap status</p>
-        <h2>{loading ? 'Loading…' : error ? 'Closed for mysteries' : keg?.ready ? 'Open for business' : 'Tap says no'}</h2>
-        <div className="statusRow">
-          <span>Official status</span>
-          <strong><span className={`statusDot ${keg?.ready ? 'good' : error ? 'alert' : 'neutral'}`} />{keg?.ready ? 'Ready' : error ? 'Offline' : 'Unknown'}</strong>
-        </div>
-        <div className="statusRow">
-          <span>Optimism</span>
-          <strong>{percent >= 50 ? 'Abundant' : percent >= 20 ? 'Measured' : percent > 0 ? 'Fragile' : 'Gone'}</strong>
-        </div>
-        <div className="statusRow">
-          <span>Next move</span>
-          <strong>{isWater?(percent>=20?'Ready to pour':'Refill the water keg'):(percent >= 20 ? 'Pour responsibly' : 'Text the supplier')}</strong>
-        </div>
       </div>
 
       <KegHistory history={history} pours={pours} currentBeerOz={keg?.beerOz} latestKegChange={latestKegChange} />
