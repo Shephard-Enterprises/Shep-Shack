@@ -4,6 +4,7 @@ import WorkoutSession from './WorkoutSession'
 import { beginWorkoutSession } from './workout-session.mjs'
 import { playTimerSound, unlockTimerAudio } from './timer-audio.mjs'
 import MovementPicker from './MovementPicker'
+import MovementCreator from './MovementCreator'
 import { movementFor, movementIdentity, searchMovements } from '../supabase/functions/_shared/movement-library.mjs'
 import { completedSets, createSession, exerciseProgress, FITNESS_PROFILES, localDate, MAX_EXERCISES, MAX_SETS, newExercise, newRoutine, normalizeSession, parseRoutineText, totalVolume } from './fitness-model.mjs'
 import './FitnessPage.css'
@@ -133,7 +134,7 @@ function FitnessTracker({ userId, profileId }) {
       {tab === 'cardio' && <><div className="fitness-section-title"><div><h3>Go the distance.</h3><p className="fitness-muted">Walks, runs, rides, swims, and everything in between.</p></div><button className="fitness-primary" disabled={busy} onClick={() => setCardio(true)}>+ Log cardio</button></div>{cardio && <CardioForm busy={busy} onCancel={() => setCardio(false)} onSave={session => action(async () => { await data.saveSession(session, true); setCardio(false); setNotice('Cardio saved.'); })} />}<CardioSummary sessions={completed.filter(session => session.kind === 'cardio')} /></>}
       {tab === 'history' && <History sessions={completed} onDelete={session => setConfirm({ kind: 'session', id: session.id, name: session.name })} busy={busy} />}
       {tab === 'progress' && <Progress sessions={completed} movements={data.movements} />}
-      {tab === 'movements' && <MovementLibrary movements={data.movements} routines={data.routines} sessions={data.sessions} busy={busy} onLink={(name, id) => action(async () => { await data.linkHistory(name, id); setNotice('Movement history linked. Progress now uses the same movement across workouts.'); })} />}
+      {tab === 'movements' && <MovementLibrary onCreate={async (name, mode, details) => { setNotice(''); const movement = await data.createMovement(name, mode, details); setNotice(`${movement.name} is ready in your movement library.`); return movement }} movements={data.movements} routines={data.routines} sessions={data.sessions} busy={busy} onLink={(name, id) => action(async () => { await data.linkHistory(name, id); setNotice('Movement history linked. Progress now uses the same movement across workouts.'); })} />}
 
     </>}
     {confirm && <DeleteDialog target={confirm} onCancel={() => setConfirm(null)} onDelete={removeConfirmed} />}
@@ -217,16 +218,23 @@ function TrainingPreferences({ name, value, busy, onSave }) {
   return <details className="fitness-training-notes"><summary>Training preferences for {name}{value ? ' · saved' : ''}</summary><form onSubmit={event => { event.preventDefault(); onSave(preferences) }}><label>Goals, equipment & schedule<textarea rows={3} maxLength={2000} value={preferences} disabled={busy} placeholder="My goals, equipment, available days, and movements I prefer…" onChange={event => setPreferences(event.target.value)} /></label><button type="submit" disabled={busy}>Save training preferences</button><p>These notes belong to {name} and help Patty tailor workouts for this profile.</p></form></details>
 }
 
-function MovementLibrary({ movements, routines, sessions, busy, onLink }) {
+function MovementLibrary({ movements, routines, sessions, busy, onLink, onCreate }) {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('All')
+  const [adding, setAdding] = useState(false)
   const filtered = searchMovements(query, movements, category)
   const unresolved = new Map()
   for (const record of [...routines, ...sessions]) for (const exercise of record.exercises) {
     if (!movementFor(exercise, movements)) unresolved.set(`${exercise.name}:${exercise.mode || 'reps'}`, exercise)
   }
   const active = sessions.some(session => session.status === 'draft')
-  return <div className="fitness-library"><section className="fitness-panel"><div className="fitness-section-title"><div><p>ONE MOVEMENT. ONE HISTORY.</p><h3>Your movement library</h3></div><span>{movements.length} movements</span></div><p className="fitness-muted">Manual workouts and Patty use this same library. Equipment variations stay separate; Justin and Rosy keep their own progress. Add custom movements while building a routine.</p><div className="fitness-library-search"><label>Search movements<input value={query} placeholder="Search curls, dumbbells, legs…" onChange={event => setQuery(event.target.value)} /></label><label>Muscle group<select aria-label="Movement category" value={category} onChange={event => setCategory(event.target.value)}>{['All', ...new Set(movements.map(item => item.category).sort())].map(value => <option key={value}>{value}</option>)}</select></label></div><div className="fitness-library-list">{filtered.map(movement => <article key={movement.id}><div><strong>{movement.name}</strong><span>{movement.category} · {movement.equipment}</span></div><small>{movement.mode === 'timed' ? 'Time' : 'Reps & weight'}</small></article>)}{!filtered.length && <p className="fitness-muted">No movements match this search.</p>}</div></section>
+  return <div className="fitness-library"><section className="fitness-panel">
+    <div className="fitness-section-title fitness-library-heading"><div><p>ONE MOVEMENT. ONE HISTORY.</p><h3>Your movement library</h3></div><div className="fitness-actions"><span>{movements.length} movements</span><button type="button" className="fitness-primary" disabled={busy || adding} onClick={() => setAdding(true)}>+ Add movement</button></div></div>
+    <p className="fitness-muted">Manual workouts and Patty use this same library. Equipment variations stay separate; Justin and Rosy keep their own progress.</p>
+    {adding && <MovementCreator library={movements} disabled={busy} onCancel={() => setAdding(false)} onSave={async (name, mode, details) => { const saved = await onCreate(name, mode, details); setQuery(saved.name); setCategory('All'); setAdding(false) }} />}
+    <div className="fitness-library-search"><label>Search movements<input value={query} placeholder="Search curls, dumbbells, legs…" onChange={event => setQuery(event.target.value)} /></label><label>Muscle group<select aria-label="Movement category" value={category} onChange={event => setCategory(event.target.value)}>{['All', ...new Set(movements.map(item => item.category).sort())].map(value => <option key={value}>{value}</option>)}</select></label></div>
+    <div className="fitness-library-list">{filtered.map(movement => <article key={movement.id}><div><strong>{movement.name}</strong><span>{movement.category} · {movement.equipment}</span></div><small>Default: {movement.mode === 'timed' ? 'Time' : 'Reps'}</small></article>)}{!filtered.length && <p className="fitness-muted">No movements match this search.</p>}</div>
+  </section>
     {unresolved.size > 0 && <section className="fitness-panel"><h3>Link older movement names</h3><p className="fitness-muted">Names such as “curls” need a specific variation. Choose what you actually performed to join its history. This updates only this training profile.</p>{active && <p className="fitness-muted">Finish or discard your active workout before linking older entries.</p>}{[...unresolved].map(([key, exercise]) => <LegacyMovement key={key} exercise={exercise} movements={movements} disabled={busy || active} onLink={onLink} />)}</section>}
   </div>
 }

@@ -77,12 +77,16 @@ export default function useFitness(userId, profileId) {
     const saved = check(await supabase.from('fitness_profiles').update({ preferences }).eq('id', profileId).select().single())
     setProfile(saved)
   }
-  async function createMovement(name, mode) {
+  async function createMovement(name, mode, details = {}) {
+    if (!['reps', 'timed'].includes(mode)) throw new Error('Choose Reps or Time tracking.')
+    const category = String(details.category || 'Custom').trim() || 'Custom'
+    const equipment = String(details.equipment || 'Other').trim() || 'Other'
+    if (category.length > 50 || equipment.length > 60) throw new Error('Keep the muscle group under 50 characters and equipment under 60.')
     const existing = resolveMovement(name, movements)
     if (existing) return existing
     const trimmed = name.trim()
     if (!trimmed || trimmed.length > 100) throw new Error('Enter a movement name up to 100 characters.')
-    const result = await supabase.from('fitness_movements').insert({ id: `custom-${crypto.randomUUID()}`, name: trimmed, mode, category: 'Custom', equipment: 'Other', aliases: [], created_by: userId }).select().single()
+    const result = await supabase.from('fitness_movements').insert({ id: `custom-${crypto.randomUUID()}`, name: trimmed, mode, category, equipment, aliases: [], created_by: userId }).select().single()
     if (result.error?.code === '23505') {
       const library = check(await supabase.from('fitness_movements').select('*').order('name'))
       setMovements(library)

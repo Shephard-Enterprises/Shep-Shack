@@ -80,7 +80,7 @@ Timed exercises use **Time** tracking with a target in seconds. Starting a timed
 
 ### Shared movement library
 
-Manual and Patty-created plans select the same stable movement IDs. The **Movements** view includes 50 built-in movements, searchable by name, alias, muscle group, or equipment. Add a custom movement directly from the manual routine builder. **Save & review** shows the plan before you press **Start workout**; the AI key is not needed for manual tracking.
+Manual and Patty-created plans select the same stable movement IDs. The **Movements** view includes 50 built-in movements, searchable by name, alias, muscle group, or equipment. Add a custom movement from **Fitness → Movements → + Add movement**, or directly from the manual routine builder. Choose a name, default Reps/Time tracking, muscle group, and optional equipment. New entries are shared by both profiles and available to Patty; existing names and aliases reuse the original entry. **Save & review** shows the plan before you press **Start workout**; the AI key is not needed for manual tracking.
 
 Progress and previous-weight suggestions follow the movement across different routines within the selected training profile. For example, `DB curls` and `Dumbbell curl` link to **Dumbbell curl**; **Barbell curl** and **Dumbbell hammer curl** have separate histories. Pounds and kilograms are converted for comparison. For dumbbell exercises, log the weight of one dumbbell consistently.
 
