@@ -59,7 +59,7 @@ export function useKegStatus({ scaleId = 'beer', enabled = true, includeHistory 
         const kegChangeRequest = supabase.from('keg_scale_changes').select('id,changed_at,starting_ounces,starting_percent').eq('scale_id', scaleId).order('changed_at', { ascending: false }).limit(1).maybeSingle()
         const detailRequests = includeHistory ? [
           supabase.from('keg_scale_readings').select('payload, recorded_at').eq('scale_id', scaleId).gte('recorded_at', since24h).order('recorded_at', { ascending: true }).limit(1500),
-          supabase.from('keg_scale_pours').select('id,poured_at,ounces,beer_oz_after').eq('scale_id', scaleId).gte('poured_at', since30d).order('poured_at', { ascending: false }).limit(500),
+          supabase.from('keg_scale_pours').select('id,poured_at,ounces,beer_oz_after').eq('scale_id', scaleId).eq('verification_status', 'confirmed').gte('poured_at', since30d).order('poured_at', { ascending: false }).limit(500),
         ] : []
         const nameRequest = supabase.from('keg_scale_settings').select('display_name').eq('scale_id', scaleId).single()
         const [{ data, error: dbError }, { data: kegChange, error: changeError }, nameResult, ...details] = await Promise.all([latestRequest, kegChangeRequest, nameRequest, ...detailRequests])

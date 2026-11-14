@@ -4,6 +4,8 @@ Private household dashboard built with React, Vite, Supabase, and an ESP32 keg s
 
 The landscape iPad layout keeps each dashboard overview within one screen. Weather shows current conditions, the seven-day forecast, and radar; tap a day for additional details. Fitness keeps routine exercises collapsed until needed.
 
+Pour totals and Patty use server-confirmed events. Device-reported pours stay out of analytics until a full four-minute stability window passes; rejected events and the original readings remain available for diagnosis.
+
 ## Local development
 
 Create `.env` in the project root with the public browser configuration:

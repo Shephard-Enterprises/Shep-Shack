@@ -39,22 +39,65 @@ test('fresh water does not hide an offline beer scale', async () => {
   assert.equal(notices.length, 1)
   assert.match(notices[0].title, /Beer keg sensor is offline/)
 })
-test('pour and refill notifications identify water separately from beer', async () => {
-  const eventTime = Date.now() - 180_000
-  mockRest(table => table === 'keg_scale_readings'
-    ? ['beer', 'sparkling-water'].flatMap(scale_id => [-180, -120, -60, 60, 120, 180].map(seconds => ({
-      scale_id, recorded_at: new Date(eventTime + seconds * 1000).toISOString(),
-      payload: { ready: true, beerOz: seconds < 0 ? 400 : 384 },
-    })))
-    : ['beer', 'sparkling-water'].map((scale_id, id) => ({ id, scale_id, ounces: 16, beer_oz_after: 384, poured_at: new Date(eventTime).toISOString() })))
+function pourScenario({ rebound = false, age = 5 * 60_000, failWrite = false, full = false } = {}) {
+  const eventTime = Date.now() - age
+  const pours = ['beer', 'sparkling-water'].map((scale_id, id) => ({
+    id, scale_id, ounces: 16, beer_oz_after: 384,
+    poured_at: new Date(eventTime).toISOString(), verification_status: 'pending',
+  }))
+  const writes = []
+  globalThis.fetch = async (raw, init = {}) => {
+    const url = new URL(raw), table = url.pathname.split('/').at(-1), params = url.searchParams
+    let result
+    if (init.method === 'PATCH') {
+      if (failWrite) return new Response('Unavailable', { status: 503 })
+      const row = pours.find(row => `eq.${row.id}` === params.get('id'))
+      Object.assign(row, JSON.parse(init.body)); writes.push({ ...row }); result = null
+    } else if (table === 'keg_scale_readings') {
+      assert.ok(params.getAll('recorded_at').length === 2)
+      result = (full ? Array(1000).fill(60) : [-180, -120, -60, 60, 120, 180, 230]).map(seconds => ({
+        scale_id: params.get('scale_id').slice(3), recorded_at: new Date(eventTime + seconds * 1000).toISOString(),
+        payload: { ready: true, beerOz: seconds < 0 || (rebound && seconds === 230) ? 400 : 384 },
+      }))
+    } else if (table === 'keg_scale_pours') {
+      const status = params.get('verification_status').slice(3)
+      result = pours.filter(row => row.verification_status === status && (status !== 'pending' || age >= 4 * 60_000))
+    } else result = pours
+    return new Response(JSON.stringify(result))
+  }
+  return { pours, writes }
+}
+
+test('verifies and persists pours separately for both scales before notifying', async () => {
+  const { pours, writes } = pourScenario()
   assert.deepEqual((await worker.collectKegPours()).map(row => row.title), ['Beer poured', 'Sparkling water poured'])
+  assert.deepEqual(writes.map(row => row.verification_status), ['confirmed', 'confirmed'])
+  assert.ok(pours.every(row => Number.isFinite(Date.parse(row.verified_at))))
   assert.deepEqual((await worker.collectKegChanges()).map(row => row.url), ['/?page=keg&scale=beer', '/?page=keg&scale=sparkling-water'])
+  // A later worker run uses the stored verdict without reprocessing the events.
+  assert.equal((await worker.collectKegPours()).length, 2)
+  assert.equal(writes.length, 2)
 })
 
-test('does not issue a pour notification when the weight rebounds', async () => {
-  const eventTime = Date.now() - 3 * 60_000
-  mockRest(table => table === 'keg_scale_readings'
-    ? [-180, -120, -60, 60, 120, 180].map(seconds => ({ scale_id: 'beer', recorded_at: new Date(eventTime + seconds * 1000).toISOString(), payload: { ready: true, beerOz: seconds === 60 ? 384 : 400 } }))
-    : [{ id: 1, scale_id: 'beer', ounces: 16, beer_oz_after: 384, poured_at: new Date(eventTime).toISOString() }])
+test('rejects a late rebound within the complete four-minute window', async () => {
+  const { writes } = pourScenario({ rebound: true })
   assert.deepEqual(await worker.collectKegPours(), [])
+  assert.ok(writes.every(row => row.verification_status === 'rejected'))
+})
+
+test('does not count or notify pending events before the window closes', async () => {
+  const { writes } = pourScenario({ age: 180_000 })
+  assert.deepEqual(await worker.collectKegPours(), [])
+  assert.equal(writes.length, 0)
+})
+
+test('does not notify if the verification write fails', async () => {
+  pourScenario({ failWrite: true })
+  await assert.rejects(worker.collectKegPours(), /Database 503/)
+})
+
+test('a truncated reading window cannot confirm a pour', async () => {
+  const { writes } = pourScenario({ full: true })
+  assert.deepEqual(await worker.collectKegPours(), [])
+  assert.ok(writes.every(row => row.verification_status === 'rejected'))
 })

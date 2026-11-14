@@ -1164,6 +1164,7 @@ function KegHistory({ history, pours, currentBeerOz, latestKegChange }) {
     <div className="card accent-keg" data-screen-label="Today">
       <p className="cardLabel">Today at the tap</p>
       <h2>{todaysPours.length ? `${ouncesToday.toFixed(1)} oz poured` : 'No pours yet'}</h2>
+      <p className="cardMeta">Confirmed pours · about a 4-minute delay</p>
       <div className="statusRow"><span>Pours</span><strong>{todaysPours.length}</strong></div>
       <div className="statusRow"><span>Average pour</span><strong>{averagePour == null ? '—' : `${averagePour.toFixed(1)} oz`}</strong></div>
       <div className="statusRow"><span>Last pour</span><strong>{activePours[0] ? `${activePours[0].ounces.toFixed(1)} oz · ${activePours[0].pouredAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : '—'}</strong></div>
@@ -1175,7 +1176,7 @@ function KegHistory({ history, pours, currentBeerOz, latestKegChange }) {
       <p className="cardLabel">Recent pours</p>
       <h2>{activePours.length ? `${activePours.length} from this keg` : 'Waiting for first pour'}</h2>
       {activePours.slice(0, 5).map(pour => <div className="statusRow" key={pour.id}><span>{pour.pouredAt.toLocaleDateString([], { weekday: 'short' })} · {pour.pouredAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span><strong>{pour.ounces.toFixed(1)} oz</strong></div>)}
-      {!activePours.length && <p className="placeholderText">New ESP32 pour events will show here.</p>}
+      {!activePours.length && <p className="placeholderText">Pours appear here after the scale reading stays stable.</p>}
     </div>
 
     <div className="card wideCard accent-keg drinkingTimesCard" data-screen-label="Drinking times">

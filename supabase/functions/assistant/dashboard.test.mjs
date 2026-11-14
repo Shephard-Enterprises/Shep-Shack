@@ -32,6 +32,7 @@ test('tap context uses saved names, current keg normalization, Pacific days, and
   assert.equal(beer.ouncesPouredLastSevenDays, 20)
   assert.equal(beer.ouncesRemaining, 320)
   assert.ok(paths.some(path => path.includes('scale_id=eq.sparkling-water')))
+  assert.ok(paths.filter(path => path.startsWith('keg_scale_pours?')).every(path => path.includes('verification_status=eq.confirmed')))
   assert.doesNotMatch(JSON.stringify(data), /SECRET|password|"lat"|"lon"/)
 })
 test('weather uses NWS periods and supplemental UV, never follows an arbitrary forecast URL', async () => {

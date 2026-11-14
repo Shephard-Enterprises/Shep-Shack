@@ -139,7 +139,7 @@ async function taps({ db, now }) {
       const [readings, changes, records] = await Promise.all([
         db(`keg_scale_readings?scale_id=eq.${scaleId}&select=payload,recorded_at&order=recorded_at.desc&limit=1`),
         db(`keg_scale_changes?scale_id=eq.${scaleId}&select=changed_at,starting_ounces,starting_percent&order=changed_at.desc&limit=1`),
-        db(`keg_scale_pours?scale_id=eq.${scaleId}&poured_at=gte.${encodeURIComponent(since)}&select=poured_at,ounces&order=poured_at.desc&limit=501`),
+        db(`keg_scale_pours?scale_id=eq.${scaleId}&verification_status=eq.confirmed&poured_at=gte.${encodeURIComponent(since)}&select=poured_at,ounces&order=poured_at.desc&limit=501`),
       ])
       const reading = readings[0], change = changes[0], payload = reading?.payload
       const at = iso(reading?.recorded_at), startingPercent = number(change?.starting_percent)
@@ -150,7 +150,7 @@ async function taps({ db, now }) {
       const today = active.filter(item => datePacific(item.poured_at) === datePacific(now))
       const week = active.filter(item => Date.parse(item.poured_at) >= now - 7 * 86400000)
       const ounces = items => Math.round(items.reduce((sum, item) => sum + (number(item.ounces) || 0), 0) * 10) / 10
-      return { scaleId, name: text(settings.find(item => item.scale_id === scaleId)?.display_name), status: at ? now - Date.parse(at) > 5 * 60000 ? 'stale' : 'available' : 'unavailable', observedAt: at, ouncesRemaining: number(payload?.beerOz), pintsRemaining: number(payload?.pintsLeft), percentRemaining: percent, totalWeightPounds: number(payload?.totalWeightLb), kegChangedAt: iso(change?.changed_at), ouncesPouredToday: ounces(today), poursToday: today.length, ouncesPouredLastSevenDays: ounces(week), recentPours: active.slice(0, 5).map(item => ({ at: iso(item.poured_at), ounces: number(item.ounces) })), historyTruncated: records.length > 500, scope: 'At most 500 recorded pours in the last 30 days, restricted to the current keg for totals. Missing recordings are not proof of no use.' }
+      return { scaleId, name: text(settings.find(item => item.scale_id === scaleId)?.display_name), status: at ? now - Date.parse(at) > 5 * 60000 ? 'stale' : 'available' : 'unavailable', observedAt: at, ouncesRemaining: number(payload?.beerOz), pintsRemaining: number(payload?.pintsLeft), percentRemaining: percent, totalWeightPounds: number(payload?.totalWeightLb), kegChangedAt: iso(change?.changed_at), ouncesPouredToday: ounces(today), poursToday: today.length, ouncesPouredLastSevenDays: ounces(week), recentPours: active.slice(0, 5).map(item => ({ at: iso(item.poured_at), ounces: number(item.ounces) })), historyTruncated: records.length > 500, scope: 'At most 500 server-confirmed pours in the last 30 days, restricted to the current keg for totals. Pours need about four minutes of stable readings to confirm. Missing recordings are not proof of no use.' }
     } catch { return { scaleId, ...failed() } }
   })) }
 }

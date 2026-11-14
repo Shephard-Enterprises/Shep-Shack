@@ -54,12 +54,24 @@ async function collectKeg(): Promise<Notice[]> {
 }
 
 async function collectKegPours(): Promise<Notice[]> {
+  // Finalize a full four-minute window once, rather than exposing raw device
+  // events in analytics while only filtering their notifications.
+  const oldest = new Date(Date.now() - 30 * 86400_000).toISOString()
+  const mature = new Date(Date.now() - 4 * 60_000).toISOString()
+  const pending = await rest(`keg_scale_pours?verification_status=eq.pending&poured_at=gte.${encodeURIComponent(oldest)}&poured_at=lte.${encodeURIComponent(mature)}&select=id,scale_id,poured_at,ounces,beer_oz_after&order=poured_at.asc&limit=50`)
+  await Promise.all((pending ?? []).map(async (pour: any) => {
+    const time = Date.parse(pour.poured_at)
+    const start = new Date(time - 4 * 60_000).toISOString()
+    const end = new Date(time + 4 * 60_000).toISOString()
+    const readings = await rest(`keg_scale_readings?scale_id=eq.${pour.scale_id}&recorded_at=gte.${encodeURIComponent(start)}&recorded_at=lte.${encodeURIComponent(end)}&select=scale_id,recorded_at,payload&order=recorded_at.asc&limit=1000`)
+    const confirmed = readings?.length < 1000 && isConfirmedPour(pour, readings ?? [])
+    await rest(`keg_scale_pours?id=eq.${pour.id}&verification_status=eq.pending`, {
+      method: 'PATCH', body: JSON.stringify({ verification_status: confirmed ? 'confirmed' : 'rejected', verified_at: new Date().toISOString() }),
+    })
+  }))
   const since = new Date(Date.now() - 10 * 60 * 1000).toISOString()
-  const rows = await rest(`keg_scale_pours?select=id,scale_id,poured_at,ounces,beer_oz_after&poured_at=gte.${encodeURIComponent(since)}&order=poured_at.asc`)
-  if (!rows?.length) return []
-  const readingsSince = new Date(Date.now() - 14 * 60 * 1000).toISOString()
-  const readings = await rest(`keg_scale_readings?select=scale_id,recorded_at,payload&recorded_at=gte.${encodeURIComponent(readingsSince)}&order=recorded_at.asc`)
-  return rows.filter((pour: any) => isConfirmedPour(pour, readings ?? [])).map((pour: any) => ({
+  const rows = await rest(`keg_scale_pours?verification_status=eq.confirmed&select=id,scale_id,poured_at,ounces,beer_oz_after&poured_at=gte.${encodeURIComponent(since)}&order=poured_at.asc`)
+  return (rows ?? []).map((pour: any) => ({
     key: `keg-pour:${pour.id}`,
     category: 'keg' as const,
     title: pour.scale_id === 'sparkling-water' ? 'Sparkling water poured' : 'Beer poured',

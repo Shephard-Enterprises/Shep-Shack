@@ -103,3 +103,19 @@ test('matching initial event is allowed but cannot count as independent confirma
   assert.equal(isConfirmedPour(pour, [...baseline, event, ...settled]), true)
   assert.equal(isConfirmedPour(pour, [...baseline, event, reading(60, 384), reading(120, 384)]), false)
 })
+
+test('replay of four reported events keeps only the stable eight-ounce pour', () => {
+  const events = [
+    { ounces: 8.1, after: 212, samples: [[-220,218],[-160,219],[-99,219],[-39,220],[0,212],[60,211],[120,211],[181,211]] },
+    { ounces: 5.7, after: 215, samples: [[-189,217],[-129,222],[-68,221],[-8,215],[0,215],[60,214],[120,215],[181,213]] },
+    { ounces: 9.3, after: 221, samples: [[-203,227],[-142,230],[-82,229],[-21,227],[0,221],[60,219],[121,220],[181,222]] },
+    { ounces: 8, after: 210, samples: [[-210,216],[-146,217],[-89,218],[-29,218],[0,210],[60,210],[121,210],[181,210]] },
+  ]
+  const confirmed = events.filter(event => isConfirmedPour({ ...pour, ounces: event.ounces, beer_oz_after: event.after },
+    event.samples.map(([seconds, level]) => {
+      const row = reading(seconds, level)
+      if (!seconds) row.payload.eventType = 'pour'
+      return row
+    })))
+  assert.deepEqual(confirmed.map(event => event.ounces), [8])
+})
