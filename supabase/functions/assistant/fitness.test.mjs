@@ -169,3 +169,13 @@ test('Patty one-offs prefill historical weight and reps without marking generate
   assert.equal(sets[1].reps, null)
   assert.equal(sets[2].weight, null)
 })
+
+
+test('Patty preserves user-supplied starting weights without inventing completed sets', async () => {
+  const h = harness({ answerWorkout: { ...workout, save_as: 'adhoc', exercises: [{ ...workout.exercises[0], starting_weight: 60 }] } })
+  const result = await (await h.send()).json()
+  assert.equal(result.savedSessionId, requestId)
+  const exercise = h.calls.find(call => call.url.endsWith('/assistant_finish_adhoc')).body.p_session.exercises[0]
+  assert.equal(exercise.starting_weight, 60)
+  assert.ok(exercise.sets.every(set => set.weight === 60 && !set.done && set.seconds === null))
+})

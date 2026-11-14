@@ -34,7 +34,7 @@ export default function WorkoutSession({ draft, busy, dirty, error, onStart, onC
       {started && <button className="fitness-primary" disabled={busy} onClick={onFinish}>{busy ? 'Saving…' : 'Finish workout ✓'}</button>}
     </header>
     {!started ? <section className="fitness-panel fitness-start-card">
-      <ol className="fitness-plan-list">{draft.exercises.map(exercise => <li key={exercise.id}><strong>{exercise.name}</strong><span>{exercise.sets.length} × {exercise.mode === 'timed' ? `${exercise.target_seconds}s` : `${exercise.target} reps`}</span></li>)}</ol>
+      <ol className="fitness-plan-list">{draft.exercises.map(exercise => <li key={exercise.id}><strong>{exercise.name}</strong><span>{exercise.sets.length} × {exercise.mode === 'timed' ? `${exercise.target_seconds}s` : `${exercise.target} reps`}{exercise.starting_weight != null ? ` · starting ${exercise.starting_weight} lbs` : ''}</span></li>)}</ol>
       <p className="fitness-muted">{timedWorkout ? 'Start opens your timer. Work and rest follow your plan; you can return to your sets at any time.' : 'Start opens your set checklist. Log what you do, check it off, and finish whenever you’re done.'}</p>
       <button type="button" className="fitness-primary fitness-start-button" disabled={busy} onClick={onStart}>{busy ? 'Starting…' : 'Start workout →'}</button>
     </section> : <>

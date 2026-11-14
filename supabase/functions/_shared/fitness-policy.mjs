@@ -11,6 +11,7 @@ export function validateRoutine(routine) {
   for (const exercise of routine.exercises) {
     if (!exercise.name?.trim() || exercise.name.trim().length > 100) throw new Error('Each exercise needs a name up to 100 characters.')
     if (!Number.isInteger(Number(exercise.sets)) || exercise.sets < 1 || exercise.sets > MAX_SETS) throw new Error('Choose 1–12 sets for each exercise.')
+    if (exercise.starting_weight != null && exercise.starting_weight !== '' && (!Number.isFinite(Number(exercise.starting_weight)) || Number(exercise.starting_weight) < 0 || Number(exercise.starting_weight) > 2000)) throw new Error('Starting weights must be 0–2,000 lbs, or left blank.')
     const mode = exercise.mode || 'reps'
     if (!['reps', 'timed'].includes(mode)) throw new Error('Choose reps or timed for each exercise.')
     if (mode === 'timed') {
@@ -19,7 +20,7 @@ export function validateRoutine(routine) {
     if (exercise.work_seconds != null && exercise.work_seconds !== '' && (!Number.isInteger(Number(exercise.work_seconds)) || Number(exercise.work_seconds) < 1 || Number(exercise.work_seconds) > 7200)) throw new Error('Work windows must be whole seconds from 1–7,200, or left blank.')
     if (!Number.isInteger(Number(exercise.rest)) || exercise.rest < 0 || exercise.rest > 600) throw new Error('Rest should be 0–600 seconds.')
   }
-  return { ...routine, timer_order: routine.timer_order || 'sets', name: routine.name.trim(), notes: (routine.notes || '').trim(), exercises: routine.exercises.map(exercise => ({ ...exercise, name: exercise.name.trim(), sets: Number(exercise.sets), rest: Number(exercise.rest), mode: exercise.mode || 'reps', work_seconds: exercise.work_seconds ? Number(exercise.work_seconds) : null, seconds: exercise.mode === 'timed' ? Number(exercise.seconds) : null, reps: exercise.mode === 'timed' ? '' : exercise.reps.trim() })) }
+  return { ...routine, timer_order: routine.timer_order || 'sets', name: routine.name.trim(), notes: (routine.notes || '').trim(), exercises: routine.exercises.map(exercise => ({ ...exercise, name: exercise.name.trim(), starting_weight: exercise.starting_weight == null || exercise.starting_weight === '' ? null : Number(exercise.starting_weight), sets: Number(exercise.sets), rest: Number(exercise.rest), mode: exercise.mode || 'reps', work_seconds: exercise.work_seconds ? Number(exercise.work_seconds) : null, seconds: exercise.mode === 'timed' ? Number(exercise.seconds) : null, reps: exercise.mode === 'timed' ? '' : exercise.reps.trim() })) }
 }
 
 
@@ -29,8 +30,8 @@ export function sessionExercises(exercises) {
     name: exercise.name, mode: exercise.mode || 'reps', target: exercise.reps,
     target_seconds: exercise.mode === 'timed' ? Number(exercise.seconds) : null,
     work_seconds: exercise.mode === 'timed' ? null : exercise.work_seconds ? Number(exercise.work_seconds) : null,
-    rest: Number(exercise.rest),
-    sets: Array.from({ length: Number(exercise.sets) }, () => ({ id: crypto.randomUUID(), weight: null, reps: null, seconds: null, done: false })),
+    starting_weight: exercise.starting_weight == null || exercise.starting_weight === '' ? null : Number(exercise.starting_weight), rest: Number(exercise.rest),
+    sets: Array.from({ length: Number(exercise.sets) }, () => ({ id: crypto.randomUUID(), weight: exercise.starting_weight == null || exercise.starting_weight === '' ? null : Number(exercise.starting_weight), reps: null, seconds: null, done: false })),
   }))
 }
 
@@ -46,8 +47,9 @@ export function prefillSessionExercises(exercises, previous = [], unit = 'lb', l
     const prior = session?.exercises.find(matches)
     return { ...exercise, sets: exercise.sets.map((set, index) => {
       const old = prior?.sets[index]?.done ? prior.sets[index] : null
-      let weight = old?.weight == null ? null : Number(old.weight)
-      if (weight != null && session.unit !== unit) weight *= session.unit === 'kg' ? 2.2046226218 : 1 / 2.2046226218
+      const previousWeight = old ? old.weight : set.weight
+      let weight = previousWeight == null ? null : Number(previousWeight)
+      if (old && weight != null && session.unit !== unit) weight *= session.unit === 'kg' ? 2.2046226218 : 1 / 2.2046226218
       return { ...set, weight: weight == null ? null : Math.round(weight * 100) / 100, reps: exercise.mode === 'timed' ? null : old?.reps ?? null, seconds: null, done: false }
     }) }
   })

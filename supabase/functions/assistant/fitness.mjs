@@ -11,7 +11,7 @@ export const fitnessFormat = {
         type: 'object', additionalProperties: false, required: ['save_as', 'timer_order', 'name', 'unit', 'notes', 'exercises'],
         properties: {
           save_as: { type: 'string', enum: ['routine', 'adhoc'] }, timer_order: { type: 'string', enum: ['sets', 'circuit'] }, name: { type: 'string' }, unit: { type: 'string', enum: ['lb'] }, notes: { type: 'string' },
-          exercises: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['movement_id', 'name', 'sets', 'reps', 'rest', 'mode', 'seconds', 'work_seconds'], properties: { work_seconds: { type: 'null' }, movement_id: { type: 'string' }, mode: { type: 'string', enum: ['reps', 'timed'] }, seconds: { type: ['integer', 'null'] }, name: { type: 'string' }, sets: { type: 'integer' }, reps: { type: 'string' }, rest: { type: 'integer' } } } },
+          exercises: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['movement_id', 'name', 'sets', 'reps', 'rest', 'mode', 'seconds', 'work_seconds', 'starting_weight'], properties: { starting_weight: { type: ['number', 'null'] }, work_seconds: { type: 'null' }, movement_id: { type: 'string' }, mode: { type: 'string', enum: ['reps', 'timed'] }, seconds: { type: ['integer', 'null'] }, name: { type: 'string' }, sets: { type: 'integer' }, reps: { type: 'string' }, rest: { type: 'integer' } } } },
         },
       }] },
     },

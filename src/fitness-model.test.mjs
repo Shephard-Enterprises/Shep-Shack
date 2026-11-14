@@ -104,3 +104,19 @@ test('prefill uses the latest completed session even when history arrives out of
   const next = createSession(routine, [older, newer])
   assert.deepEqual(next.exercises[0].sets.map(set => [set.weight, set.reps]), [[125, 10], [130, 8]])
 })
+
+
+test('prescribed starting weights seed new sets while recorded history takes precedence', () => {
+  const plan = validateRoutine({ ...routine, exercises: [{ ...routine.exercises[0], sets: 3, reps: '10', starting_weight: 115 }] })
+  const first = createSession(plan)
+  assert.deepEqual(first.exercises[0].sets.map(set => set.weight), [115,115,115])
+  assert.ok(first.exercises[0].sets.every(set => !set.done))
+  const prior = session()
+  prior.exercises[0].sets = [done(120, 8)]
+  const next = createSession(plan, [prior])
+  assert.deepEqual(next.exercises[0].sets.map(set => set.weight), [120,115,115])
+  assert.equal(next.exercises[0].sets[0].reps, 8)
+  assert.equal(next.exercises[0].target, '10')
+  assert.throws(() => validateRoutine({ ...plan, exercises: [{ ...plan.exercises[0], starting_weight: -1 }] }), /Starting weights/)
+  assert.throws(() => validateRoutine({ ...plan, exercises: [{ ...plan.exercises[0], starting_weight: 'bad' }] }), /Starting weights/)
+})
