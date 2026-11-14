@@ -1,7 +1,7 @@
 import { pauseWorkoutTimer, workoutPhases } from './workout-timer.mjs'
 import { BUILTIN_MOVEMENTS, movementIdentity, movementFor, resolveMovement } from '../supabase/functions/_shared/movement-library.mjs'
 export { movementIdentity }
-import { MAX_EXERCISES, MAX_SETS, sessionExercises, validateRoutine } from '../supabase/functions/_shared/fitness-policy.mjs'
+import { MAX_EXERCISES, MAX_SETS, prefillSessionExercises, sessionExercises, validateRoutine } from '../supabase/functions/_shared/fitness-policy.mjs'
 export { MAX_EXERCISES, MAX_SETS, validateRoutine }
 export const exerciseKey = name => name.trim().toLocaleLowerCase('en-US').replace(/\s+/g, ' ')
 export const localDate = (date = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
@@ -24,17 +24,13 @@ export function parseRoutineText(text) {
 }
 
 export function createSession(routine, previous, date = localDate(), library = BUILTIN_MOVEMENTS) {
-  const priorSessions = (Array.isArray(previous) ? previous : [previous]).filter(Boolean)
   return {
     id: crypto.randomUUID(), routine_id: routine.id, is_adhoc: false, timer_order: routine.timer_order || 'sets', timer_state: null, execution_started_at: null, name: routine.name, unit: 'lb',
     performed_on: date, started_at: new Date().toISOString(), completed_at: null, status: 'draft', kind: 'strength', notes: routine.notes || '',
-    exercises: sessionExercises(routine.exercises).map(exercise => {
-      const lastSession = priorSessions.find(session => session.exercises.some(item => movementIdentity(item, library) === movementIdentity(exercise, library) && (item.mode || 'reps') === exercise.mode))
-      const lastExercise = lastSession?.exercises.find(item => movementIdentity(item, library) === movementIdentity(exercise, library) && (item.mode || 'reps') === exercise.mode)
+    exercises: prefillSessionExercises(sessionExercises(routine.exercises), previous, 'lb', library, routine.profile_id).map(exercise => {
       const movement = movementFor(exercise, library)
-      return { ...exercise, movement_id: exercise.movement_id || movement?.id || null, name: movement?.name || exercise.name, sets: exercise.sets.map((set, index) => {
-        const last = lastExercise?.sets.filter(item => item.done)[index]
-        return { ...set, reps: '', seconds: '', weight: last?.weight == null ? '' : round(convertWeight(last.weight, lastSession.unit, 'lb')) }
+      return { ...exercise, movement_id: exercise.movement_id || movement?.id || null, name: movement?.name || exercise.name, sets: exercise.sets.map(set => {
+        return { ...set, reps: set.reps ?? '', seconds: '', weight: set.weight ?? '' }
       }) }
     }),
   }

@@ -39,7 +39,7 @@ export default function WorkoutSession({ draft, busy, dirty, error, onStart, onC
       <button type="button" className="fitness-primary fitness-start-button" disabled={busy} onClick={onStart}>{busy ? 'Starting…' : 'Start workout →'}</button>
     </section> : <>
       {timedWorkout && <button ref={timerButton} type="button" className="fitness-open-timer" onClick={() => setTimerOpen(true)}>Open workout timer →</button>}
-      <p className="fitness-session-guide">{timedWorkout ? 'Enter the time or reps you actually completed, then check each set.' : 'Your targets are below. Enter your reps and check each set.'} Weights in lbs; leave weight blank for bodyweight.</p>
+      <p className="fitness-session-guide">{timedWorkout ? 'Enter the time or reps you actually completed, then check each set.' : 'Last weights and reps are prefilled when available. Adjust them and check each completed set.'} Weights in lbs; leave weight blank for bodyweight.</p>
       {draft.exercises.map((exercise, index) => {
         const timed = exercise.mode === 'timed'
         return <section className="fitness-panel fitness-log-exercise" key={exercise.id}>

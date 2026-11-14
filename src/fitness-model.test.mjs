@@ -13,11 +13,11 @@ test('routine paste preserves rep ranges and rejects malformed or excessive plan
   assert.throws(() => parseRoutineText('Squat | 3 | 10 | 90 | unexpected'), /Line 1/)
   assert.throws(() => validateRoutine({ ...routine, name: ' ' }), /name/)
 })
-test('new workout uses prior weights across units without checking off old work', () => {
+test('new workout reuses weight and reps across units without checking off old work', () => {
   const next = createSession({ ...routine, unit: 'kg' }, session('kg'))
   assert.equal(next.unit, 'lb')
   assert.equal(next.exercises[0].sets[0].weight, 220.46)
-  assert.equal(next.exercises[0].sets[0].reps, '')
+  assert.equal(next.exercises[0].sets[0].reps, 8)
   assert.equal(next.exercises[0].sets[0].done, false)
 })
 test('completion allows zero or partial sets, validates checked sets, and ignores unfinished sets in totals', () => {
@@ -80,4 +80,27 @@ test('countdowns use absolute time, resume from pauses, and never count below ze
   assert.equal(timerRemaining(timer, 20500), 35)
   assert.equal(timerRemaining(timer, 80000), 0)
   assert.equal(timerRemaining({ ...timer, endAt: null, remaining: 12 }, 100000), 12)
+})
+
+
+test('prefill ignores drafts, empty sessions, other profiles and modes, preserving skipped set positions', () => {
+  const profile = 'justin'
+  const plan = { ...routine, profile_id: profile, exercises: [{ id: 'curl', movement_id: 'dumbbell-curl', name: 'Dumbbell curl', mode: 'reps', sets: 4, reps: '8–12', rest: 60 }] }
+  const prior = { ...createSession(plan), status: 'completed', profile_id: profile, performed_on: '2026-01-01' }
+  prior.exercises[0].sets = [done(20, 12), { ...done(25, 10), done: false }, done(30, 8)]
+  const empty = { ...prior, performed_on: '2026-01-03', exercises: prior.exercises.map(item => ({ ...item, sets: item.sets.map(set => ({ ...set, done: false })) })) }
+  const other = { ...prior, profile_id: 'rosy', performed_on: '2026-01-04' }
+  const draft = { ...prior, status: 'draft', performed_on: '2026-01-05' }
+  const timed = { ...prior, performed_on: '2026-01-06', exercises: prior.exercises.map(item => ({ ...item, mode: 'timed' })) }
+  const next = createSession(plan, [prior, empty, other, draft, timed])
+  assert.deepEqual(next.exercises[0].sets.map(set => [set.weight, set.reps]), [[20, 12], ['', ''], [30, 8], ['', '']])
+  assert.ok(next.exercises[0].sets.every(set => !set.done && set.seconds === ''))
+  assert.equal(next.exercises[0].target, '8–12')
+  assert.notEqual(next.exercises[0].sets[0].id, prior.exercises[0].sets[0].id)
+})
+test('prefill uses the latest completed session even when history arrives out of order', () => {
+  const older = session(), newer = { ...session(), performed_on: '2026-01-02' }
+  newer.exercises[0].sets = [done(125, 10), done(130, 8)]
+  const next = createSession(routine, [older, newer])
+  assert.deepEqual(next.exercises[0].sets.map(set => [set.weight, set.reps]), [[125, 10], [130, 8]])
 })

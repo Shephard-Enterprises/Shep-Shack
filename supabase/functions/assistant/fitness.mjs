@@ -1,5 +1,5 @@
 import { BUILTIN_MOVEMENTS, linkExercises, movementIdentity, resolveMovement } from '../_shared/movement-library.mjs'
-import { sessionExercises, validateRoutine } from '../_shared/fitness-policy.mjs'
+import { prefillSessionExercises, sessionExercises, validateRoutine } from '../_shared/fitness-policy.mjs'
 
 export const fitnessFormat = {
   type: 'json_schema', name: 'patty_fitness_response', strict: true,
@@ -53,7 +53,7 @@ export async function loadFitness(db, profileId) {
   const routines = await db(`fitness_routines?profile_id=eq.${profileId}&select=id,name,unit,exercises,timer_order&order=updated_at.desc&limit=20`)
   const sessions = []
   for (let offset = 0; ; offset += 200) {
-    const batch = await db(`fitness_sessions?profile_id=eq.${profileId}&status=eq.completed&select=id,name,kind,performed_on,completed_at,is_adhoc,unit,minutes,distance,distance_unit,notes,exercises&order=performed_on.desc,completed_at.desc,id.asc&offset=${offset}&limit=200`)
+    const batch = await db(`fitness_sessions?profile_id=eq.${profileId}&status=eq.completed&select=id,profile_id,status,name,kind,performed_on,completed_at,is_adhoc,unit,minutes,distance,distance_unit,notes,exercises&order=performed_on.desc,completed_at.desc,id.asc&offset=${offset}&limit=200`)
     sessions.push(...batch)
     if (batch.length < 200) break
   }
@@ -103,7 +103,7 @@ export async function loadFitness(db, profileId) {
   while (size() > 12000 && summary.exerciseProgress.length) summary.exerciseProgress.pop()
   while (size() > 12000 && summary.cardioProgress.length) summary.cardioProgress.pop()
   while (size() > 12000 && summary.movementLibrary.length > 1) summary.movementLibrary.pop()
-  return { profile: profiles[0], summary, library }
+  return { profile: profiles[0], summary, library, sessions }
 }
 
 export function parseFitnessAnswer(result, text, library = BUILTIN_MOVEMENTS) {
@@ -123,6 +123,6 @@ export function parseFitnessAnswer(result, text, library = BUILTIN_MOVEMENTS) {
   return { reply: answer.reply.trim(), workout }
 }
 
-export function adhocPayload(workout) {
-  return { name: workout.name, unit: workout.unit, notes: workout.notes, timer_order: workout.timer_order || 'sets', exercises: sessionExercises(workout.exercises) }
+export function adhocPayload(workout, previous = [], library = BUILTIN_MOVEMENTS) {
+  return { name: workout.name, unit: workout.unit, notes: workout.notes, timer_order: workout.timer_order || 'sets', exercises: prefillSessionExercises(sessionExercises(workout.exercises), previous, workout.unit, library) }
 }

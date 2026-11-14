@@ -1,3 +1,5 @@
+import { BUILTIN_MOVEMENTS, movementIdentity } from './movement-library.mjs'
+
 export const MAX_EXERCISES = 20
 export const MAX_SETS = 12
 export function validateRoutine(routine) {
@@ -30,4 +32,23 @@ export function sessionExercises(exercises) {
     rest: Number(exercise.rest),
     sets: Array.from({ length: Number(exercise.sets) }, () => ({ id: crypto.randomUUID(), weight: null, reps: null, seconds: null, done: false })),
   }))
+}
+
+
+// Carry forward suggestions only. Recorded completion and performed time always
+// start empty. Match the original set position so skipped sets cannot shift data.
+export function prefillSessionExercises(exercises, previous = [], unit = 'lb', library = BUILTIN_MOVEMENTS, profileId = null) {
+  const history = (Array.isArray(previous) ? previous : [previous]).filter(session => session?.status === 'completed' && (!profileId || session.profile_id === profileId)).sort((a, b) =>
+    String(b.performed_on || '').localeCompare(String(a.performed_on || '')) || String(b.completed_at || b.started_at || '').localeCompare(String(a.completed_at || a.started_at || '')))
+  return exercises.map(exercise => {
+    const matches = item => movementIdentity(item, library) === movementIdentity(exercise, library) && (item.mode || 'reps') === (exercise.mode || 'reps') && item.sets.some(set => set.done)
+    const session = history.find(item => (item.exercises || []).some(matches))
+    const prior = session?.exercises.find(matches)
+    return { ...exercise, sets: exercise.sets.map((set, index) => {
+      const old = prior?.sets[index]?.done ? prior.sets[index] : null
+      let weight = old?.weight == null ? null : Number(old.weight)
+      if (weight != null && session.unit !== unit) weight *= session.unit === 'kg' ? 2.2046226218 : 1 / 2.2046226218
+      return { ...set, weight: weight == null ? null : Math.round(weight * 100) / 100, reps: exercise.mode === 'timed' ? null : old?.reps ?? null, seconds: null, done: false }
+    }) }
+  })
 }

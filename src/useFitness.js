@@ -62,7 +62,7 @@ export default function useFitness(userId, profileId) {
   async function saveAdhoc(raw) {
     const plan = validateRoutine({ ...raw, unit: 'lb' })
     plan.exercises = linkExercises(plan.exercises, movements)
-    return saveSession(createAdhocSession(plan, sessions.filter(session => session.status === 'completed'), undefined, movements))
+    return saveSession(createAdhocSession({ ...plan, profile_id: profileId }, sessions.filter(session => session.status === 'completed'), undefined, movements))
   }
   async function remove(kind, id) {
     const table = kind === 'routine' ? 'fitness_routines' : 'fitness_sessions'

@@ -36,7 +36,7 @@ test('malformed, incomplete, or invalid plans are never accepted for saving', ()
   assert.throws(() => parseFitnessAnswer({}, JSON.stringify({ reply: 'Plan', workout: { ...workout, exercises: [{ ...workout.exercises[0], sets: 99 }] } })), /1–12/)
   assert.equal(parseFitnessAnswer({ output: [{ content: [{ type: 'refusal', refusal: 'Cannot help' }] }] }, '').workout, null)
 })
-function harness({ saveFails = false, answerWorkout = workout, saveAs = 'auto', message = 'Write and save my next workout' } = {}) {
+function harness({ saveFails = false, answerWorkout = workout, saveAs = 'auto', message = 'Write and save my next workout', sessionHistory = [] } = {}) {
   const calls = []
   const handler = createHandler({ env, fetchImpl: async (url, options = {}) => {
     const body = options.body ? JSON.parse(options.body) : null
@@ -45,7 +45,8 @@ function harness({ saveFails = false, answerWorkout = workout, saveAs = 'auto', 
     if (url.endsWith('/rpc/is_household_member')) return json(true)
     if (url.includes('/fitness_movements?')) return json(BUILTIN_MOVEMENTS)
     if (url.includes('/fitness_profiles?')) return json([{ id: profileId, name: 'Rosy' }])
-    if (url.includes('/fitness_routines?') || url.includes('/fitness_sessions?') || url.includes('/assistant_profiles?')) return json([])
+    if (url.includes('/fitness_sessions?')) return json(url.includes('status=eq.completed') ? sessionHistory : [])
+    if (url.includes('/fitness_routines?') || url.includes('/assistant_profiles?')) return json([])
     if (url.includes('/assistant_threads?')) return json([{ messages: [] }])
     if (url.endsWith('/rpc/assistant_reserve') || url.endsWith('/rpc/assistant_finish')) return json(null)
     if (url.endsWith('/rpc/assistant_finish_adhoc')) return saveFails ? json({ message: 'Finish or discard the active workout' }, 400) : json(requestId)
@@ -152,4 +153,19 @@ test('dashboard questions with a selected training profile cannot create workout
   const rejected = await (await unexpectedPlan.send()).json()
   assert.match(rejected.error, /No workout was saved/)
   assert.equal(unexpectedPlan.calls.some(call => /assistant_finish_(fitness|adhoc)/.test(call.url)), false)
+})
+
+
+test('Patty one-offs prefill historical weight and reps without marking generated work complete', async () => {
+  const sessionHistory = [{ id: 'old', profile_id: profileId, status: 'completed', kind: 'strength', unit: 'kg', performed_on: '2026-01-01', name: 'Prior workout', exercises: [{ id: 'row-old', movement_id: 'dumbbell-row', name: 'Dumbbell row', mode: 'reps', sets: [{ id: 'old-set', weight: 10, reps: 12, done: true }, { id: 'skipped-set', weight: 15, reps: 8, done: false }] }] }]
+  const h = harness({ answerWorkout: { ...workout, save_as: 'adhoc' }, sessionHistory })
+  const response = await (await h.send()).json()
+  assert.equal(response.savedSessionId, requestId)
+  const sets = h.calls.find(call => call.url.endsWith('/assistant_finish_adhoc')).body.p_session.exercises[0].sets
+  assert.equal(sets[0].weight, 22.05)
+  assert.equal(sets[0].reps, 12)
+  assert.ok(sets.every(set => !set.done && set.seconds === null))
+  assert.equal(sets[1].weight, null)
+  assert.equal(sets[1].reps, null)
+  assert.equal(sets[2].weight, null)
 })

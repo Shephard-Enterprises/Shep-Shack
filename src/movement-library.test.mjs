@@ -35,6 +35,7 @@ test('a different routine reuses the last weight for the same movement', () => {
   const next = createSession(ai, [old])
   assert.notEqual(next.routine_id, old.routine_id)
   assert.equal(next.exercises[0].sets[0].weight, 25)
+  assert.equal(next.exercises[0].sets[0].reps, 10)
   assert.equal(next.exercises[0].sets[0].done, false)
   assert.equal(next.exercises[0].movement_id, 'dumbbell-curl')
 })
