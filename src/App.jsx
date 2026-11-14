@@ -18,6 +18,7 @@ import NotificationControl from './NotificationControl'
 import AssistantWidget from './AssistantWidget'
 import FitnessPage from './FitnessPage'
 import { FITNESS_PROFILES } from './fitness-model.mjs'
+import './Readability.css'
 
 // Public, approximate city-center coordinates. Precise household coordinates stay server-side.
 const SANTEE = { lat: 32.8384, lon: -116.9739 }
@@ -496,29 +497,14 @@ function Dashboard({ session }) {
       </div>
       <RetroHeader now={time} activePage={activePage} title={activePage==='flights'?'Flight Radar':activePage==='keg'?'On Tap':pages.find(page=>page.id===activePage)?.label} weather={weather} compact={headerCompact} navigate={navigate} />
 
-      <nav className="topNav">
-        {pages.map(page => (
-          <button
-            key={page.id}
-            className={`navButton ${page.id === 'house' ? 'secondaryNav' : ''} ${activePage === page.id ? 'active' : ''}`}
-            onClick={() => navigate(page.id)}
-            aria-current={activePage === page.id ? 'page' : undefined}
-          >
-            <NavIcon name={page.icon} />
-            <span>{page.label}</span>
-          </button>
-        ))}
-        <button className={`navButton moreNavButton ${activePage === 'house' ? 'active' : ''}`} type="button" onClick={() => setMoreOpen(open => !open)} aria-expanded={moreOpen}>
-          <NavIcon name="more" /><span>More</span>
-        </button>
+      <nav className="topNav desktop-nav" aria-label="Dashboard">
+        {pages.map(page => <button key={page.id} className={`navButton ${activePage === page.id ? 'active' : ''}`} onClick={() => navigate(page.id)} aria-current={activePage === page.id ? 'page' : undefined}><NavIcon name={page.icon} /><span>{page.label}</span></button>)}
       </nav>
-      {moreOpen && (
-        <div className="moreMenu">
-          {pages.filter(page => page.id === 'house').map(page => (
-            <button key={page.id} type="button" onClick={() => navigate(page.id)}><NavIcon name={page.icon} />{page.label}</button>
-          ))}
-        </div>
-      )}
+      <nav className="topNav mobile-nav" aria-label="Dashboard">
+        {pages.filter(page => ['home', 'weather', 'fitness', 'keg'].includes(page.id)).map(page => <button key={page.id} className={`navButton ${activePage === page.id ? 'active' : ''}`} onClick={() => navigate(page.id)} aria-current={activePage === page.id ? 'page' : undefined}><NavIcon name={page.icon} /><span>{page.id === 'keg' ? 'On Tap' : page.label}</span></button>)}
+        <button className={`navButton ${['fire', 'flights', 'sports', 'house'].includes(activePage) ? 'active' : ''}`} type="button" onClick={() => setMoreOpen(open => !open)} aria-expanded={moreOpen} aria-controls="dashboard-more-menu"><NavIcon name="more" /><span>More</span></button>
+      </nav>
+      {moreOpen && <div className="moreMenu" id="dashboard-more-menu">{pages.filter(page => ['fire', 'flights', 'sports', 'house'].includes(page.id)).map(page => <button key={page.id} type="button" onClick={() => navigate(page.id)}><NavIcon name={page.icon} />{page.label}</button>)}</div>}
 
       {!network.online && <div className="offlineBanner" role="status"><span className="statusDot alert" />Offline · showing the last available readings</div>}
 
@@ -530,6 +516,7 @@ function Dashboard({ session }) {
         <div className="headerActions">
           <div className="systemStatus"><span className="liveDot" />{!network.online ? 'Offline' : [flightData,weatherData,fireData,safetyData,padresData,sportsData,kegData,waterKegData].some(feed=>feed.error) ? 'Some feeds unavailable' : 'Connected'}</div><button type="button" className="retro-refresh" onClick={()=>setRefreshKey(key=>key+1)} aria-label="Refresh dashboard readings">↻</button>
           <NotificationControl userId={session.user.id} onOpenSettings={() => navigate('house')} />
+          <AssistantWidget key={session.user.id} userId={session.user.id} page={activePage} profileId={fitnessProfileId} onProfileChange={changeFitnessProfile} onOpenFitness={(id, routineId) => { changeFitnessProfile(id); setOpenedFitnessRoutine(routineId); navigate('fitness') }} />
         </div>
       </header>
 
@@ -545,7 +532,7 @@ function Dashboard({ session }) {
       {activePage === 'fitness' && <FitnessPage key={openedFitnessRoutine || 'fitness'} userId={session.user.id} profileId={fitnessProfileId} onProfileChange={changeFitnessProfile} />}
       {activePage === 'house' && <HousePage session={session} />}
       </div>
-      <AssistantWidget key={session.user.id} userId={session.user.id} page={activePage} profileId={fitnessProfileId} onProfileChange={changeFitnessProfile} onOpenFitness={(id, routineId) => { changeFitnessProfile(id); setOpenedFitnessRoutine(routineId); navigate('fitness') }} />
+
     </main>
   )
 }
@@ -958,6 +945,8 @@ function WeatherRadar({ hourly }) {
   useEffect(() => {
     if (!inView || !documentVisible) return undefined
     let cancelled = false
+    let resizeFrame
+    let resizeTimeout
     loadLeaflet().then(L => {
       if (cancelled || !mapRef.current || mapInstance.current) return
       const map = L.map(mapRef.current, {
@@ -987,12 +976,16 @@ function WeatherRadar({ hourly }) {
       L.control.attribution({ prefix: false }).addTo(map)
       mapInstance.current = map
       setMapReady(true)
-      requestAnimationFrame(() => map.invalidateSize())
-      setTimeout(() => map.invalidateSize(), 250)
+      resizeFrame = requestAnimationFrame(() => map.invalidateSize())
+      resizeTimeout = setTimeout(() => map.invalidateSize(), 250)
     }).catch(error => {
       if (!cancelled) setRadarError(error.message)
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(resizeFrame)
+      clearTimeout(resizeTimeout)
+    }
   }, [inView, documentVisible])
 
   useEffect(() => () => {
@@ -1054,27 +1047,22 @@ function WeatherRadar({ hourly }) {
 function WeatherPage({ weatherData }) {
   const { weather, hourly, daily, error, loading, lastUpdated } = weatherData
   const dailyForecast = groupDailyForecast(daily)
-  const [selectedHour, setSelectedHour] = useState(null)
-  const hourDialog = useRef(null)
+  const [selectedDay, setSelectedDay] = useState(null)
+  const dayDialog = useRef(null)
 
   return <section className="weather-overview" aria-label="Weather overview">
     <section className="weather-current" aria-label="Current conditions">
       <div className="weather-current-top"><p className="cardLabel">SANTEE · CURRENT CONDITIONS</p><span className="weather-feed-state">{error?<span className="weather-feed-error" title={error} role="status">Update unavailable</span>:<Freshness date={lastUpdated} staleAfterMinutes={20}/>}</span></div>
       <div className="weather-current-body"><strong className="weather-temperature">{loading ? '—' : weather ? `${weather.temp}°` : '—'}</strong><div><h2>{weather?.description || (loading ? 'Loading weather…' : 'Weather unavailable')}</h2><div className="weather-current-metrics"><span>Wind <b>{weather?.windSpeed ?? '—'} {weather?.windDirection}</b></span><span>Humidity <b>{weather?.humidity != null ? `${weather.humidity}%` : '—'}</b></span><span>Rain <b>{weather?.precipChance != null ? `${weather.precipChance}%` : '—'}</b></span><span>UV <b>{formatUvIndex(weather?.uvIndex)}</b></span></div></div></div>
     </section>
-    <section className="weather-hours" aria-label="Hourly forecast">
-      <div className="weather-section-label"><p className="cardLabel">NEXT 12 HOURS</p><span>Select an hour for details</span></div>
-      <div className="weather-hour-grid">{hourly.slice(0,12).map((hour,index)=><button key={index} className="weather-hour" onClick={()=>{setSelectedHour(hour);hourDialog.current.showModal()}} aria-label={`${hour.time}, ${hour.temp} degrees, ${hour.description}, ${hour.precipChance}% rain chance`}><time>{hour.time}</time><strong>{hour.temp}°</strong><span className="weather-hour-description">{hour.description}</span><small className={hour.precipChance>0?'has-rain':''}>{hour.precipChance}%</small></button>)}</div>
-      {!hourly.length && <p className="retro-message">{loading?'Loading hourly forecast…':'Hourly forecast unavailable.'}</p>}
-    </section>
     <section className="weather-week" aria-label="Seven-day forecast">
-      <p className="cardLabel">7-DAY FORECAST</p>
-      <div className="weather-week-heading"><span>Day</span><span>High / Low</span><span>Conditions</span><span>Rain</span><span>Wind mph</span></div>
-      <div className="weather-week-rows">{dailyForecast.map((day,index)=><div key={index} className="weather-day"><strong title={day.name}>{day.name.replace('This Afternoon','Today').replace('This Morning','Today').replace(/(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/g,name=>name.slice(0,3))}</strong><b>{day.high ?? '—'}° / {day.low ?? '—'}°</b><span className="weather-day-description" title={day.description}>{day.description}</span><span className={day.precipChance>0?'has-rain':''}>{day.precipChance}%</span><span title={`${day.windSpeed} ${day.windDir}`}>{day.windSpeed?.replace(' to ','–').replace(' mph','')} {day.windDir}</span></div>)}</div>
+      <div className="weather-section-label"><p className="cardLabel">7-DAY FORECAST</p><span>Tap a day for details</span></div>
+      <div className="weather-week-heading"><span>Day</span><span>High / Low</span><span>Conditions</span><span>Rain</span></div>
+      <div className="weather-week-rows">{dailyForecast.map((day,index)=><button type="button" key={index} className="weather-day" onClick={()=>{setSelectedDay(day);dayDialog.current.showModal()}} aria-label={`${day.name}, high ${day.high ?? 'unavailable'}, low ${day.low ?? 'unavailable'}, ${day.description}, ${day.precipChance ?? 0}% rain chance`}><strong>{day.name.replace('This Afternoon','Today').replace('This Morning','Today')}</strong><b>{day.high ?? '—'}° / {day.low ?? '—'}°</b><span className="weather-day-description" title={day.description}>{day.description}</span><span className={day.precipChance>0?'has-rain':''}>{day.precipChance}%</span></button>)}</div>
       {!dailyForecast.length && <p className="retro-message">{loading?'Loading daily forecast…':'Daily forecast unavailable.'}</p>}
     </section>
     <div className="weather-map"><WeatherRadar hourly={hourly}/></div>
-    <dialog ref={hourDialog} className="retro-art-dialog weather-hour-dialog" aria-label="Hourly weather details"><button className="retro-dialog-close" onClick={()=>hourDialog.current.close()} aria-label="Close hourly details">×</button>{selectedHour&&<><p className="cardLabel">HOURLY FORECAST · {selectedHour.time}</p><h2>{selectedHour.temp}° · {selectedHour.description}</h2><p>Rain chance: {selectedHour.precipChance}%</p><p>Wind: {selectedHour.windSpeed ?? '—'} {selectedHour.windDir}</p></>}</dialog>
+    <dialog ref={dayDialog} className="retro-art-dialog weather-hour-dialog" aria-label="Daily weather details"><button className="retro-dialog-close" onClick={()=>dayDialog.current.close()} aria-label="Close daily details">×</button>{selectedDay&&<><p className="cardLabel">{selectedDay.name}</p><h2>{selectedDay.high ?? '—'}° / {selectedDay.low ?? '—'}°</h2><p>{selectedDay.description}</p><p>Rain chance: {selectedDay.precipChance ?? '—'}%</p><p>Wind: {selectedDay.windSpeed ?? '—'} {selectedDay.windDir}</p></>}</dialog>
   </section>
 }
 

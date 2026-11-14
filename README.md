@@ -1,6 +1,8 @@
 # Shep Shack Dashboard
 
-Private, iPhone-first household dashboard built with React, Vite, Supabase, and an ESP32 keg scale.
+Private household dashboard built with React, Vite, Supabase, and an ESP32 keg scale.
+
+The landscape iPad layout keeps each dashboard overview within one screen. Weather shows current conditions, the seven-day forecast, and radar; tap a day for additional details. Fitness keeps routine exercises collapsed until needed.
 
 ## Local development
 
