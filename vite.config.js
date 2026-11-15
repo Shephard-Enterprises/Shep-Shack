@@ -11,7 +11,7 @@ export default defineConfig(({ command }) => ({
       output: {
         manualChunks(id) {
           if (id.includes('@supabase')) return 'supabase'
-          if (id.includes('react')) return 'react'
+          if (/\/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react'
         },
       },
     },

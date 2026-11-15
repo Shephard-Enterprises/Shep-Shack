@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import './AssistantWidget.css'
 import pattyAvatar from './assets/patty.png'
 import { FITNESS_PROFILES } from './fitness-model.mjs'
 import { hasFitnessIntent } from '../supabase/functions/_shared/assistant-intent.mjs'
+
+const AssistantMarkdown = lazy(() => import('./AssistantMarkdown'))
 
 const pagePrompts = {
   home: ['Give me a household summary', 'What can you help me with?'],
@@ -222,7 +224,7 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
           <div className="assistant-quick-prompts" aria-label="Suggested questions">{(pagePrompts[page] || pagePrompts.home).map(prompt => <button key={prompt} type="button" disabled={locked} onClick={() => { setWorkoutOptions(null); setDraft(prompt); input.current?.focus() }}>{prompt}</button>)}</div>
           <div className="assistant-messages" role="log" aria-label="Conversation messages" aria-busy={busy}>
             {!messages.length && !pending && <div className="assistant-welcome"><img className="assistant-avatar" src={pattyAvatar} alt="Patty" width="96" height="96" /><h3>What’s on your mind?</h3><p>{page === 'fitness' ? 'Plan a workout or ask about your progress. Review any saved workout in Fitness, then hit Start.' : 'Ask about this dashboard, plan a workout, or get help with your day.'}</p></div>}
-            {messages.map((message, index) => <article key={index} className={`assistant-message ${message.role}`}><small>{message.role === 'user' ? 'YOU' : 'PATTY'}</small><div>{message.content}</div>{message.workoutId && <button className="assistant-open-workout" type="button" disabled={locked} onClick={() => { onOpenFitness(message.fitnessProfileId, message.workoutId); dialog.current.close() }}>Open in Fitness →</button>}</article>)}
+            {messages.map((message, index) => <article key={index} className={`assistant-message ${message.role}`}><small>{message.role === 'user' ? 'YOU' : 'PATTY'}</small>{message.role === 'assistant' ? <Suspense fallback={<div>{message.content}</div>}><AssistantMarkdown>{message.content}</AssistantMarkdown></Suspense> : <div>{message.content}</div>}{message.workoutId && <button className="assistant-open-workout" type="button" disabled={locked} onClick={() => { onOpenFitness(message.fitnessProfileId, message.workoutId); dialog.current.close() }}>Open in Fitness →</button>}</article>)}
             {pending && <><article className="assistant-message user"><small>YOU</small><div>{pending}</div></article><p className="assistant-thinking" role="status">Patty is thinking…</p></>}
             <div ref={bottom} />
           </div>

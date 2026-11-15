@@ -39,3 +39,21 @@
 .assistant-tone-setting input[role=switch]:checked::before{transform:translateX(19px)}
 .assistant-tone-setting input:disabled{opacity:.5;cursor:default}
 .assistant-tone-setting p{margin:6px 0 0!important}
+.assistant-message>.assistant-markdown{white-space:normal;min-width:0}
+.assistant-markdown p{margin:0 0 .75em;white-space:pre-wrap}
+.assistant-markdown>:first-child{margin-top:0}
+.assistant-markdown>:last-child{margin-bottom:0}
+.assistant-markdown :is(h1,h2,h3,h4,h5,h6){font:700 17px/1.35 system-ui,sans-serif;color:inherit;margin:1em 0 .5em;letter-spacing:0}
+.assistant-markdown :is(ul,ol){padding-left:1.4em;margin:.5em 0 .8em}
+.assistant-markdown li{margin:.3em 0}
+.assistant-markdown li>p{margin:.3em 0}
+.assistant-markdown blockquote{border-left:3px solid #75c8be;padding-left:12px;margin:.75em 0;color:#c4d9ca}
+.assistant-markdown a{color:#91ded1;text-decoration:underline;text-underline-offset:3px}
+.assistant-markdown code{font:12px/1.5 ui-monospace,monospace;background:#07191c;border-radius:4px;padding:2px 4px;overflow-wrap:anywhere}
+.assistant-markdown pre{overflow-x:auto;max-width:100%;padding:10px;background:#07191c;border-radius:8px;white-space:pre}
+.assistant-markdown pre code{padding:0;overflow-wrap:normal}
+.assistant-markdown hr{border:0;border-top:1px solid var(--assistant-border);margin:1em 0}
+.assistant-table{max-width:100%;overflow-x:auto;margin:.75em 0}
+.assistant-table table{border-collapse:collapse;font-size:13px;width:100%}
+.assistant-table :is(th,td){text-align:left;border:1px solid var(--assistant-border);padding:7px 9px;min-width:75px}
+.assistant-table th{background:#254b46}
