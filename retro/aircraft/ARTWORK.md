@@ -21,3 +21,9 @@ Use case: precise-object-edit. Asset type: supplied retro aircraft illustration 
 ## Bell helicopter
 
 `bell_helicopter_retro.png`: copied unchanged from the supplied “Retro Teal and Orange Utility Helicopter.png”, 1568 × 1003 with alpha transparency. Used as a Bell family reference for the Bell types already recognized by the dashboard (B06, B06T, B407, B429). The live feed supplies the displayed model name; the caption explicitly notes that the illustration may differ from that model. No variant is inferred from the artwork.
+
+## Representative matching
+
+The matcher in `src/retro-aircraft.mjs` uses known type codes first, then descriptive model names and explicit engine/configuration metadata. Single-engine props can share the Cessna illustration; Piper singles retain the Piper artwork. Ordinary helicopters share the Bell, while recognized heavy helicopters use the CH-53 illustration. The tracked aircraft's displayed name always comes from the feed, and non-exact artwork is captioned as representative.
+
+`categoryArtwork` has slots for multi-engine props, airliners, business jets, generic jets, fighters, military prop/jet transports, and tiltrotors. These slots remain empty until supplied images are added. They do not request missing files or use a small-prop picture for a known jet. Unknown types and ADS-B weight categories alone do not establish propulsion. OpenSky category 8 and ADS-B category A7 identify rotorcraft.
