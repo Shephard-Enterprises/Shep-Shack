@@ -782,7 +782,10 @@ function flightIdent(ac) {
 }
 
 function aircraftName(ac) {
-  return AIRCRAFT_NAMES[ac?.t] ?? ac?.desc ?? ac?.t ?? '—'
+  const description = typeof ac?.desc === 'string' ? ac.desc.trim() : ''
+  if (description && !/^[LASH][1-8][PTJE](?:\/\w+)?$/i.test(description)) return description
+  const code = typeof ac?.t === 'string' ? ac.t.trim().toUpperCase() : ''
+  return AIRCRAFT_NAMES[code] ?? (code || '—')
 }
 
 function flightRoute(ac) {
