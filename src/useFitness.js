@@ -53,7 +53,11 @@ export default function useFitness(userId, profileId) {
     const fields = { ...sessionFields(session), user_id: userId, profile_id: profileId }
     const query = session.updated_at ? supabase.from('fitness_sessions').update(fields).eq('id', session.id).eq('profile_id', profileId).eq('updated_at', session.updated_at) : supabase.from('fitness_sessions').insert(fields)
     const result = await query.select().single()
-    if (result.error?.code === 'PGRST116') throw new Error('This workout changed on another device. Reload Fitness before saving again.')
+    if (result.error?.code === 'PGRST116') {
+      const conflict = new Error('This workout changed on another device. Your edits are kept on this device. Reload Fitness before saving again.')
+      conflict.code = 'FITNESS_CONFLICT'
+      throw conflict
+    }
     if (result.error?.code === '23505') throw new Error('A workout is already in progress. Reload Fitness to resume it.')
     const saved = check(result)
     setSessions(current => [saved, ...current.filter(item => item.id !== saved.id)].sort((a, b) => b.performed_on.localeCompare(a.performed_on) || (b.completed_at || b.started_at).localeCompare(a.completed_at || a.started_at)))

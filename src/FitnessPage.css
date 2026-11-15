@@ -11,3 +11,5 @@
 .fitness-history-actions{display:flex;justify-content:flex-end;margin-top:16px;padding-top:12px;border-top:1px solid #b8c8aa26}.fitness-page .fitness-history-actions button{color:#e9a28e;padding:8px 0;min-height:40px}
 
 .fitness-new-movement{border:1px solid #77bca65c;border-radius:12px;background:#082124;padding:20px;margin:22px 0}.fitness-new-movement h3{font-size:21px;margin-top:0}.fitness-new-movement fieldset{border:0;padding:0;margin:0;min-width:0}.fitness-new-movement-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:20px 0}.fitness-new-movement .fitness-actions{margin-top:18px}.fitness-library-heading>.fitness-actions{justify-content:flex-end}.fitness-new-movement select{min-height:43px}@media(max-width:650px){.fitness-library-heading{flex-wrap:wrap;gap:12px}.fitness-library-heading>.fitness-actions{width:100%;justify-content:space-between}.fitness-new-movement{padding:16px 12px}.fitness-new-movement-fields{grid-template-columns:1fr;gap:14px}}
+
+.fitness-sync-status{font-size:13px;color:#b5cbbd;margin:4px 0 14px;line-height:1.4}

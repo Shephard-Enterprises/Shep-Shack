@@ -3,6 +3,18 @@ import { supabase } from './supabase'
 import './AssistantWidget.css'
 import pattyAvatar from './assets/patty.png'
 import { FITNESS_PROFILES } from './fitness-model.mjs'
+import { hasFitnessIntent } from '../supabase/functions/_shared/assistant-intent.mjs'
+
+const pagePrompts = {
+  home: ['Give me a household summary', 'What can you help me with?'],
+  weather: ['What is the forecast today?', 'Will it rain soon?'],
+  fire: ['Summarize current safety alerts', 'How is the air quality?'],
+  flights: ['What aircraft is overhead?', 'Explain the flight radar'],
+  sports: ['What are the latest scores?', 'Who plays next?'],
+  keg: ['How much beer is left?', 'How many pours today?'],
+  fitness: ['Write a one-off workout for today', 'How is my training progressing?'],
+  house: ['How do I enable notifications?', 'Explain the dashboard settings'],
+}
 
 const money = value => `$${Number(value || 0).toFixed(3)}`
 const check = result => { if (result.error) throw result.error; return result.data }
@@ -38,6 +50,8 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
   const [preferences, setPreferences] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [workoutOptions, setWorkoutOptions] = useState(null)
+  const showTraining = workoutOptions ?? (page === 'fitness' || hasFitnessIntent(draft))
 
   useEffect(() => { bottom.current?.scrollIntoView({ block: 'nearest' }) }, [messages, busy])
 
@@ -87,6 +101,7 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
     setError('')
     setNotice('')
     setView('chat')
+    setWorkoutOptions(null)
     input.current?.focus()
   }
   async function selectThread(id) {
@@ -118,7 +133,7 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
     setNotice('')
     setPending(message)
     try {
-      const result = await assistant({ threadId, requestId: crypto.randomUUID(), message, page, profileId, saveAs })
+      const result = await assistant({ threadId, requestId: crypto.randomUUID(), message, page, profileId, saveAs: showTraining ? saveAs : 'auto' })
       setMessages(result.messages)
       if (result.savedRoutineId || result.savedSessionId) window.dispatchEvent(new CustomEvent('fitness-updated', { detail: { profileId: result.fitnessProfileId } }))
       setDraft('')
@@ -172,25 +187,28 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
           <button type="button" aria-pressed={view === 'settings'} onClick={() => setView('settings')}>Preferences & budget</button>
           <button type="button" onClick={newChat} disabled={locked}>+ New</button>
         </div>
-        <div className="assistant-budget" aria-live="polite">{budget ? `${money(budget.used)} / $${Number(budget.limit).toFixed(2)} this month · household` : 'Loading monthly budget…'}</div>
+        {view === 'settings' && <div className="assistant-budget" aria-live="polite">{budget ? `${money(budget.used)} / $${Number(budget.limit).toFixed(2)} this month · household` : 'Loading monthly budget…'}</div>}
         {loading && <p className="assistant-notice" role="status">Loading your assistant…</p>}
         {configured && !workoutsReady && !loading && <p className="assistant-notice">Patty’s updated workout service needs deployment before this version can send messages.</p>}
         {!configured && !loading && <p className="assistant-notice">Chat needs to be connected before it can answer. Your preferences and budget can still be saved.</p>}
         {error && <p className="assistant-error" role="alert">{error}</p>}
         {notice && <p className="assistant-notice" role="status">{notice}</p>}
         {view === 'chat' ? <>
-          <div className="assistant-training-profile"><label htmlFor="assistant-training-profile">Training for</label><select id="assistant-training-profile" value={profileId} disabled={locked} onChange={event => onProfileChange(event.target.value)}>{FITNESS_PROFILES.map(profile => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select><span>Workouts save here</span></div>
+          <button className="assistant-workout-toggle" type="button" aria-expanded={showTraining} aria-controls="assistant-workout-options" onClick={() => setWorkoutOptions(!showTraining)}>Workout options{showTraining ? ' −' : ' +'}</button>
+          {showTraining && <div id="assistant-workout-options"><div className="assistant-training-profile"><label htmlFor="assistant-training-profile">Training for</label><select id="assistant-training-profile" value={profileId} disabled={locked} onChange={event => onProfileChange(event.target.value)}>{FITNESS_PROFILES.map(profile => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select><span>Workouts save here</span></div>
           <div className="assistant-training-profile"><label htmlFor="assistant-save-as">Save workouts as</label><select id="assistant-save-as" value={saveAs} disabled={locked} onChange={event => setSaveAs(event.target.value)}><option value="auto">Follow my request</option><option value="adhoc">One-off workout</option><option value="routine">Reusable routine</option></select></div>
-          <div className="assistant-history">
+          </div>}
+          <details className="assistant-conversations"><summary>Conversations{threads.length ? ` (${threads.length})` : ''}</summary><div className="assistant-history">
             <label htmlFor="assistant-thread">Conversation</label>
             <select id="assistant-thread" value={exists ? threadId : ''} disabled={locked} onChange={event => selectThread(event.target.value)}>
               <option value="">New conversation</option>
               {threads.map(thread => <option key={thread.id} value={thread.id}>{thread.title}</option>)}
             </select>
             {exists && <button type="button" disabled={locked} onClick={removeThread} aria-label="Delete selected conversation">Delete</button>}
-          </div>
+          </div></details>
+          <div className="assistant-quick-prompts" aria-label="Suggested questions">{(pagePrompts[page] || pagePrompts.home).map(prompt => <button key={prompt} type="button" disabled={locked} onClick={() => { setWorkoutOptions(null); setDraft(prompt); input.current?.focus() }}>{prompt}</button>)}</div>
           <div className="assistant-messages" role="log" aria-label="Conversation messages" aria-busy={busy}>
-            {!messages.length && !pending && <div className="assistant-welcome"><img className="assistant-avatar" src={pattyAvatar} alt="Patty" width="96" height="96" /><h3>What’s on your mind?</h3><p>Plan a workout, ask about a movement, or get help with your day.</p><p>Select a training profile above. I can set up your workout there. Open Fitness to review it and hit Start.</p><div>{['Write a one-off workout for today', 'How is my training progressing?'].map(prompt => <button key={prompt} type="button" disabled={locked} onClick={() => { setDraft(prompt); input.current?.focus() }}>{prompt} ↗</button>)}</div></div>}
+            {!messages.length && !pending && <div className="assistant-welcome"><img className="assistant-avatar" src={pattyAvatar} alt="Patty" width="96" height="96" /><h3>What’s on your mind?</h3><p>{page === 'fitness' ? 'Plan a workout or ask about your progress. Review any saved workout in Fitness, then hit Start.' : 'Ask about this dashboard, plan a workout, or get help with your day.'}</p></div>}
             {messages.map((message, index) => <article key={index} className={`assistant-message ${message.role}`}><small>{message.role === 'user' ? 'YOU' : 'PATTY'}</small><div>{message.content}</div>{message.workoutId && <button className="assistant-open-workout" type="button" disabled={locked} onClick={() => { onOpenFitness(message.fitnessProfileId, message.workoutId); dialog.current.close() }}>Open in Fitness →</button>}</article>)}
             {pending && <><article className="assistant-message user"><small>YOU</small><div>{pending}</div></article><p className="assistant-thinking" role="status">Patty is thinking…</p></>}
             <div ref={bottom} />

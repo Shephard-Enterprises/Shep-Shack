@@ -24,3 +24,10 @@
 @media(max-height:550px){.assistant-header{padding:8px 16px}.assistant-header small,.assistant-footnote{display:none}.assistant-header h2{font-size:19px}.assistant-tabs{padding-bottom:6px}.assistant-budget{padding:4px 16px}}
 .assistant-training-profile{display:flex;align-items:center;gap:8px;margin:0 16px 9px;font-size:11px;color:#b5cbbd}.assistant-training-profile select{min-width:85px;color:#f5dfb8;background:#183e38;border:1px solid #7dad9566;border-radius:7px;padding:6px}.assistant-training-profile>span{margin-left:auto;font-size:10px;color:#93b5a1}
 .assistant-message .assistant-open-workout{margin-top:13px;background:#327560;border-color:#7fbc99;color:#f9edcd;font-size:12px;font-weight:600}
+
+.assistant-dialog .assistant-workout-toggle{align-self:flex-start;margin:0 16px 6px;min-height:36px;padding:5px 0;background:none;border:0;color:#b5cbbd;font-size:13px}
+.assistant-conversations{margin:0 16px 8px;color:#b5cbbd;font-size:13px;flex-shrink:0}
+.assistant-conversations summary{cursor:pointer;padding:7px 0}
+.assistant-conversations .assistant-history{padding:6px 0;margin:0}
+.assistant-quick-prompts{display:flex;gap:7px;padding:0 16px 8px;flex-wrap:wrap;flex-shrink:0}
+.assistant-quick-prompts button{font-size:12px;min-height:36px;padding:7px 10px;background:transparent;text-align:left}

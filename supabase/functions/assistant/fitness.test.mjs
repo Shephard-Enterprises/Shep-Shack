@@ -43,6 +43,7 @@ function harness({ saveFails = false, answerWorkout = workout, saveAs = 'auto', 
     calls.push({ url, body, headers: options.headers })
     if (url.endsWith('/auth/v1/user')) return json({ id: userId })
     if (url.endsWith('/rpc/is_household_member')) return json(true)
+    if (url.includes('/assistant_request_metrics?')) return json(null)
     if (url.includes('/fitness_movements?')) return json(BUILTIN_MOVEMENTS)
     if (url.includes('/fitness_profiles?')) return json([{ id: profileId, name: 'Rosy' }])
     if (url.includes('/fitness_sessions?')) return json(url.includes('status=eq.completed') ? sessionHistory : [])
@@ -74,7 +75,7 @@ test('progress-only replies do not create routines; failed saves never return a 
   const result = await (await failed.send()).json()
   assert.match(result.error, /Storage/)
   assert.equal(result.messages, undefined)
-  assert.equal(failed.calls.at(-1).body.p_amount, 0.00035)
+  assert.equal(failed.calls.filter(call => call.url.endsWith('/rpc/assistant_finish')).at(-1).body.p_amount, 0.00035)
 })
 
 test('Patty receives completed timed sets as seconds and creates validated timed plans', async () => {
@@ -147,11 +148,13 @@ test('dashboard questions with a selected training profile cannot create workout
   const result = await (await h.send()).json()
   assert.ok(result.messages)
   const payload = h.calls.find(call => call.url === 'https://api.openai.com/v1/responses').body
-  assert.deepEqual(payload.text.format.schema.properties.workout, { type: 'null' })
+  assert.equal(payload.text, undefined)
+  assert.equal(h.calls.some(call => /\/fitness_(sessions|routines|movements|profiles)\?/.test(call.url)), false)
   assert.equal(h.calls.some(call => /assistant_finish_(fitness|adhoc)/.test(call.url)), false)
   const unexpectedPlan = harness({ message: 'What is the weather?', answerWorkout: workout })
   const rejected = await (await unexpectedPlan.send()).json()
-  assert.match(rejected.error, /No workout was saved/)
+  assert.equal(rejected.savedRoutineId, null)
+  assert.equal(rejected.savedSessionId, null)
   assert.equal(unexpectedPlan.calls.some(call => /assistant_finish_(fitness|adhoc)/.test(call.url)), false)
 })
 

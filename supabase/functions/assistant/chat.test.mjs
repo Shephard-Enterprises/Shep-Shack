@@ -7,7 +7,7 @@ const threadId = '00000000-0000-0000-0000-000000000002'
 const requestId = '00000000-0000-0000-0000-000000000003'
 const env = key => ({ SUPABASE_URL: 'https://db.test', SUPABASE_ANON_KEY: 'public', SUPABASE_SERVICE_ROLE_KEY: 'private', OPENAI_API_KEY: 'secret' })[key]
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status })
-function harness({ member = true, auth = true, reservationError, upstream, preferences = 'Dumbbells only', history = [] } = {}) {
+function harness({ member = true, auth = true, reservationError, upstream, preferences = 'Dumbbells only', history = [], metricsFail = false, metricsWait = null } = {}) {
   const calls = []
   const fetchImpl = async (url, options = {}) => {
     const body = options.body ? JSON.parse(options.body) : null
@@ -17,6 +17,7 @@ function harness({ member = true, auth = true, reservationError, upstream, prefe
     if (url.includes('/assistant_threads?')) return json([{ messages: history }])
     if (url.includes('/assistant_profiles?')) return json([{ preferences }])
     if (url.endsWith('/rpc/assistant_reserve')) return reservationError ? json({ message: reservationError }, 400) : json(null)
+    if (url.includes('/assistant_request_metrics?')) { if (metricsFail) throw new Error('Metrics unavailable'); if (metricsWait) await metricsWait; return json(null) }
     if (url.endsWith('/rpc/assistant_finish')) return json(null)
     if (url === 'https://api.openai.com/v1/responses') return upstream ? upstream() : json({ output: [{ type: 'message', content: [{ type: 'output_text', text: 'Try three sets of squats.' }] }], usage: { input_tokens: 1000, output_tokens: 100 } })
     throw new Error(`Unexpected fetch: ${url}`)
@@ -60,9 +61,9 @@ test('save and settle an answer with server-loaded preferences and authenticated
   assert.equal(paid.body.tools, undefined)
   assert.match(paid.body.input[0].content, /Dumbbells only/)
   assert.doesNotMatch(JSON.stringify(paid.body), /IGNORE SERVER/)
-  assert.equal(h.calls.at(-1).body.p_amount, 0.00015)
-  assert.equal(h.calls.at(-1).options.headers.Authorization, 'Bearer private')
-  assert.equal(h.calls.at(-1).body.p_messages.length, 4)
+  assert.equal(h.calls.filter(call => call.url.endsWith('/rpc/assistant_finish')).at(-1).body.p_amount, 0.00015)
+  assert.equal(h.calls.filter(call => call.url.endsWith('/rpc/assistant_finish')).at(-1).options.headers.Authorization, 'Bearer private')
+  assert.equal(h.calls.filter(call => call.url.endsWith('/rpc/assistant_finish')).at(-1).body.p_messages.length, 4)
 })
 
 test('ambiguous failures retain their full reservation; rejected requests release it', async () => {
@@ -75,15 +76,15 @@ test('ambiguous failures retain their full reservation; rejected requests releas
     const h = harness({ upstream })
     const result = await h.send()
     assert.ok((await result.json()).error)
-    assert.equal(h.calls.at(-1).body.p_amount, expected)
-    assert.equal(h.calls.at(-1).body.p_messages, undefined)
+    assert.equal(h.calls.filter(call => call.url.endsWith('/rpc/assistant_finish')).at(-1).body.p_amount, expected)
+    assert.equal(h.calls.filter(call => call.url.endsWith('/rpc/assistant_finish')).at(-1).body.p_messages, undefined)
   }
 })
 
 test('usage without text still settles the billed tokens', async () => {
   const h = harness({ upstream: () => json({ output: [], usage: { input_tokens: 1000, output_tokens: 500 } }) })
   assert.ok((await (await h.send()).json()).error)
-  assert.equal(h.calls.at(-1).body.p_amount, 0.00035)
+  assert.equal(h.calls.filter(call => call.url.endsWith('/rpc/assistant_finish')).at(-1).body.p_amount, 0.00035)
 })
 
 test('context and output limits bound costs, including multibyte text', () => {
@@ -113,4 +114,49 @@ test('full conversations and invalid requests never reserve or spend', async () 
   const invalid = harness()
   assert.equal((await invalid.send({ threadId: 'invalid' })).status, 400)
   assert.equal(invalid.calls.length, 2)
+})
+
+
+test('everyday chat with a selected profile skips fitness and records content-free usage', async () => {
+  const h = harness()
+  const response = await h.send({ profileId: '11111111-1111-4111-8111-111111111111', message: 'Tell me a joke', page: 'home' })
+  assert.equal(response.status, 200)
+  assert.equal(h.calls.some(call => /\/fitness_/.test(call.url)), false)
+  const metric = h.calls.find(call => call.url.includes('/assistant_request_metrics?')).body
+  assert.equal(metric.outcome, 'success')
+  assert.equal(metric.fitness_context, false)
+  assert.equal(metric.input_tokens, 1000)
+  assert.equal(metric.output_tokens, 100)
+  assert.ok(metric.total_ms >= metric.model_ms)
+  assert.doesNotMatch(JSON.stringify(metric), /joke|Dumbbells|squats/)
+})
+
+test('failed model calls record their stage without error content; telemetry failures cannot break answers', async () => {
+  const failed = harness({ upstream: () => json({ error: 'private upstream details' }, 500) })
+  await failed.send()
+  const metric = failed.calls.find(call => call.url.includes('/assistant_request_metrics?')).body
+  assert.equal(metric.outcome, 'error')
+  assert.equal(metric.error_stage, 'model')
+  assert.equal(metric.input_tokens, null)
+  assert.doesNotMatch(JSON.stringify(metric), /private upstream/)
+  const h = harness({ metricsFail: true })
+  assert.equal((await h.send()).status, 200)
+  assert.ok(h.calls.find(call => call.url.endsWith('/rpc/assistant_finish')).body.p_messages)
+})
+
+
+test('production metrics run in the background without holding the chat response', { timeout: 2000 }, async () => {
+  const previous = globalThis.EdgeRuntime, tasks = []
+  let release
+  const metricsWait = new Promise(resolve => { release = resolve })
+  globalThis.EdgeRuntime = { waitUntil: task => tasks.push(task) }
+  try {
+    const h = harness({ metricsWait })
+    assert.equal((await h.send()).status, 200)
+    assert.equal(tasks.length, 1)
+  } finally {
+    release()
+    await Promise.all(tasks)
+    globalThis.EdgeRuntime = previous
+  }
 })

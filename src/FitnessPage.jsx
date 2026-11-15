@@ -8,10 +8,12 @@ import MovementCreator from './MovementCreator'
 import { movementFor, movementIdentity, searchMovements } from '../supabase/functions/_shared/movement-library.mjs'
 import { completedSets, createSession, exerciseProgress, FITNESS_PROFILES, localDate, MAX_EXERCISES, MAX_SETS, newExercise, newRoutine, normalizeSession, parseRoutineText, totalVolume } from './fitness-model.mjs'
 import './FitnessPage.css'
+import { createDraftSync } from './draft-sync.mjs'
 
 const format = value => Number(value).toLocaleString('en-US', { maximumFractionDigits: 1 })
 const dateLabel = date => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })
 const storageKey = cacheId => `shep-fitness-draft:${cacheId}`
+const closingDrafts = new Map()
 function readDraft(cacheId, server) {
   try {
     const cached = JSON.parse(localStorage.getItem(storageKey(cacheId)))
@@ -25,17 +27,58 @@ export default function FitnessPage({ userId, profileId, onProfileChange }) {
 
 function FitnessTracker({ userId, profileId }) {
   const data = useFitness(userId, profileId)
+  const reload = data.reload
   const cacheId = `${userId}:${profileId}`
   const [tab, setTab] = useState('routines')
   const [editor, setEditor] = useState(null)
   const [adhocEditor, setAdhocEditor] = useState(false)
   const [draft, setDraft] = useState(null)
-  const [dirty, setDirty] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [confirm, setConfirm] = useState(null)
   const [cardio, setCardio] = useState(false)
+  const [syncState, setSyncState] = useState('saved')
+  const sync = useRef(null)
+  const alive = useRef(false)
+  const saveSession = useRef(data.saveSession)
+  useEffect(() => { saveSession.current = data.saveSession }, [data.saveSession])
+  useEffect(() => {
+    let mounted = true
+    alive.current = true
+    const controller = createDraftSync({
+      save: next => saveSession.current(next),
+      online: () => navigator.onLine,
+      onState: state => { if (mounted) setSyncState(state) },
+      onError: failure => { if (mounted && navigator.onLine) setError(failure.message) },
+      onSaved: ({ latest, clean }) => {
+        // Do not replace a newer local edit from another mount/device context.
+        try {
+          const cached = JSON.parse(localStorage.getItem(storageKey(cacheId)))
+          const content = value => JSON.stringify({ ...value, updated_at: undefined })
+          if (cached?.id === latest.id && content(cached) === content(latest)) {
+            if (clean) localStorage.removeItem(storageKey(cacheId))
+            else localStorage.setItem(storageKey(cacheId), JSON.stringify(latest))
+          }
+        } catch { /* Keep the cloud save even when local storage is unavailable. */ }
+        if (mounted) { setDraft(latest); setError('') }
+      },
+    })
+    sync.current = controller
+    const retry = () => { controller.flush().catch(() => {}) }
+    const onHidden = () => { if (document.visibilityState === 'hidden') retry() }
+    window.addEventListener('online', retry)
+    document.addEventListener('visibilitychange', onHidden)
+    return () => {
+      mounted = false
+      alive.current = false
+      window.removeEventListener('online', retry)
+      document.removeEventListener('visibilitychange', onHidden)
+      const closing = controller.flush().catch(() => {})
+      closingDrafts.set(cacheId, closing)
+      closing.finally(() => { if (closingDrafts.get(cacheId) === closing) closingDrafts.delete(cacheId) })
+    }
+  }, [cacheId])
   const restored = useRef(false)
   const completed = data.sessions.filter(session => session.status === 'completed')
   const active = draft || data.sessions.find(session => session.status === 'draft')
@@ -44,21 +87,34 @@ function FitnessTracker({ userId, profileId }) {
     if (data.loading || restored.current) return
     restored.current = true
     // Restore after the async load; defer state updates to the microtask queue.
-    queueMicrotask(() => {
-      const server = data.sessions.find(session => session.status === 'draft')
+    queueMicrotask(async () => {
+      let server = data.sessions.find(session => session.status === 'draft')
+      // Navigation can unmount Fitness while its final save is still running.
+      // Wait for that write before restoring this same browser's cached draft.
+      if (closingDrafts.has(cacheId)) {
+        await closingDrafts.get(cacheId)
+        if (!alive.current) return
+        try { server = (await reload()).sessions.find(session => session.status === 'draft') }
+        catch (failure) { if (alive.current) setError(failure.message); return }
+      }
+      if (!alive.current) return
       const next = readDraft(cacheId, server)
-      if (next) { setDraft(next); setTab('workout'); setDirty(next !== server) }
+      if (next) {
+        setDraft(next); setTab('workout');
+        if (next !== server) sync.current.queue(next)
+      }
     })
-  }, [data.loading, data.sessions, cacheId])
+  }, [data.loading, data.sessions, reload, cacheId])
 
   function remember(next) {
-    setDraft(next); setDirty(true); setNotice('')
-    try { localStorage.setItem(storageKey(cacheId), JSON.stringify(next)) }
+    const queued = sync.current.queue(next)
+    setDraft(queued); setNotice('')
+    try { localStorage.setItem(storageKey(cacheId), JSON.stringify(queued)) }
     catch { setError('Device storage is full or unavailable. Use Save draft to protect your changes.') }
   }
   function forget() {
+    sync.current.reset()
     try { localStorage.removeItem(storageKey(cacheId)) } catch { /* Cloud save remains intact. */ }
-    setDirty(false)
   }
   async function action(work) {
     setBusy(true); setError(''); setNotice('')
@@ -85,14 +141,16 @@ function FitnessTracker({ userId, profileId }) {
   async function beginActive() {
     unlockTimerAudio()
     await action(async () => {
-      const saved = await data.saveSession(beginWorkoutSession(active))
+      const synced = await sync.current.flush()
+      const saved = await data.saveSession(beginWorkoutSession(synced || active))
       if (saved.timer_state?.status === 'running') playTimerSound('work')
       setDraft(saved); forget(); setTab('workout')
     })
   }
   async function saveDraft(finish = false) {
     await action(async () => {
-      const saved = await data.saveSession(active, finish)
+      const synced = await sync.current.flush()
+      const saved = finish ? await data.saveSession(synced || active, true) : synced || active
       forget()
       if (finish) { setDraft(null); setTab('history'); setNotice('Workout complete. Your progress is updated.') }
       else { setDraft(saved); setNotice('Draft synced. You can resume on another device.') }
@@ -102,6 +160,7 @@ function FitnessTracker({ userId, profileId }) {
     const target = confirm
     setConfirm(null)
     await action(async () => {
+      await sync.current.flush()
       await data.remove(target.kind, target.id)
       if (target.kind === 'routine' && active?.routine_id === target.id) remember({ ...active, routine_id: null })
       if (target.id === active?.id) { setDraft(null); forget(); setTab('routines') }
@@ -130,7 +189,7 @@ function FitnessTracker({ userId, profileId }) {
           return <article className="fitness-panel fitness-routine" key={routine.id}><div className="fitness-panel-top"><p>{routine.exercises.length} {routine.exercises.length === 1 ? 'EXERCISE' : 'EXERCISES'} · {routine.exercises.reduce((sum, exercise) => sum + exercise.sets, 0)} SETS</p><span>{routine.unit}</span></div><h3>{routine.name}</h3><details><summary>View exercises</summary><ul>{routine.exercises.map(exercise => <li key={exercise.id}><span>{exercise.name}</span><b>{exercise.sets} × {exercise.mode === 'timed' ? `${exercise.seconds}s` : exercise.reps}</b></li>)}</ul></details><p className="fitness-muted">{previous ? `Last trained ${dateLabel(previous.performed_on)}` : 'Your first session is waiting.'}</p><div className="fitness-actions"><button className="fitness-primary" disabled={busy} onClick={() => start(routine)}>{active ? 'Resume workout' : 'Start workout'} →</button><button disabled={busy} onClick={() => { setEditor(structuredClone(routine)); setAdhocEditor(false) }}>Edit</button><button className="fitness-text-button" disabled={busy || active?.routine_id === routine.id} title={active?.routine_id === routine.id ? 'Finish or discard the active workout before deleting its routine.' : undefined} aria-label={`Delete ${routine.name} routine`} onClick={() => setConfirm({ kind: 'routine', id: routine.id, name: routine.name })}>Delete</button></div></article>
         })}</div> : <div className="fitness-empty"><span>↗</span><h3>No routines yet.</h3><p>Create a reusable routine or a one-off workout.</p><button className="fitness-primary" onClick={() => { setEditor(newRoutine()); setAdhocEditor(false) }}>Create a routine</button></div>}
       </>)}
-      {tab === 'workout' && (active ? <WorkoutSession error={error} key={`${active.id}:${active.execution_started_at || 'setup'}`} onStart={beginActive} draft={active} busy={busy} dirty={dirty} onChange={remember} onSave={() => saveDraft()} onFinish={() => saveDraft(true)} onDiscard={() => setConfirm({ kind: 'session', id: active.id, name: active.name })} /> : <div className="fitness-empty"><span>＋</span><h3>Ready for your next session?</h3><p>Choose a saved routine or set up a one-off workout for today.</p><button className="fitness-primary" onClick={() => chooseTab('routines')}>Choose a routine →</button></div>)}
+      {tab === 'workout' && (active ? <WorkoutSession syncState={syncState} error={error} key={`${active.id}:${active.execution_started_at || 'setup'}`} onStart={beginActive} draft={active} busy={busy} onChange={remember} onSave={() => saveDraft()} onFinish={() => saveDraft(true)} onDiscard={() => setConfirm({ kind: 'session', id: active.id, name: active.name })} /> : <div className="fitness-empty"><span>＋</span><h3>Ready for your next session?</h3><p>Choose a saved routine or set up a one-off workout for today.</p><button className="fitness-primary" onClick={() => chooseTab('routines')}>Choose a routine →</button></div>)}
       {tab === 'cardio' && <><div className="fitness-section-title"><div><h3>Cardio</h3><p className="fitness-muted">Walks, runs, rides, swims, and everything in between.</p></div><button className="fitness-primary" disabled={busy} onClick={() => setCardio(true)}>+ Log cardio</button></div>{cardio && <CardioForm busy={busy} onCancel={() => setCardio(false)} onSave={session => action(async () => { await data.saveSession(session, true); setCardio(false); setNotice('Cardio saved.'); })} />}<CardioSummary sessions={completed.filter(session => session.kind === 'cardio')} /></>}
       {tab === 'history' && <History sessions={completed} onDelete={session => setConfirm({ kind: 'session', id: session.id, name: session.name })} busy={busy} />}
       {tab === 'progress' && <Progress sessions={completed} movements={data.movements} />}

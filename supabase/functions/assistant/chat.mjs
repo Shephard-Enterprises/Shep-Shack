@@ -1,5 +1,6 @@
 import { boundDashboardContext, dashboardGuide, dashboardSections, loadDashboard } from './dashboard.mjs'
 import { adhocPayload, fitnessFormatFor, loadFitness, parseFitnessAnswer } from './fitness.mjs'
+import { hasFitnessIntent, needsFitnessContext } from '../_shared/assistant-intent.mjs'
 // Keep the model and price assumptions together. No tools or separately billed features.
 export const MODEL = 'gpt-6-luna'
 export const MAX_OUTPUT_TOKENS = 2048
@@ -73,6 +74,16 @@ export function createHandler({ env, fetchImpl = fetch }) {
     if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
     let reservation = null
     let charge = 0
+    const startedAt = Date.now()
+    let metricsId = null
+    let stage = 'context'
+    let outcome = 'error'
+    let modelStartedAt = null
+    let modelMs = null
+    let contextMs = null
+    let usage = null
+    let sections = []
+    let fitness = null
     const url = env('SUPABASE_URL')
     const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY')
     const authorization = request.headers.get('Authorization')
@@ -104,9 +115,7 @@ export function createHandler({ env, fetchImpl = fetch }) {
       const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       if (!uuid.test(body?.threadId) || !uuid.test(body?.requestId)) return json({ error: 'Invalid conversation.' }, 400)
       if (body.profileId != null && !uuid.test(body.profileId)) return json({ error: 'Invalid training profile.' }, 400)
-      const fitness = body.profileId ? await loadFitness(db, body.profileId) : null
       if (body.saveAs != null && !['auto','routine','adhoc'].includes(body.saveAs)) return json({ error: 'Invalid workout destination.' }, 400)
-      if (fitness) fitness.summary.requestedSaveAs = body.saveAs || 'auto'
       const threads = await db(`assistant_threads?id=eq.${body.threadId}&select=messages`)
       let history = threads[0]?.messages ?? []
       if (history.length >= 60) return json({ error: 'This conversation has reached 30 exchanges. Start a new chat; saved preferences carry over.' }, 400)
@@ -115,14 +124,19 @@ export function createHandler({ env, fetchImpl = fetch }) {
       try { payload = buildInput(history, body.message, profiles[0]?.preferences, body.page, fitness) } catch (error) { return json({ error: error.message }, 400) }
       await rpc('assistant_reserve', { p_id: body.requestId, p_user: user.id, p_thread: body.threadId, p_title: body.message.trim().slice(0, 80) })
       reservation = body.requestId
+      metricsId = body.requestId
       // Read again after acquiring the reservation so a just-completed answer
       // from another device cannot be overwritten by a stale transcript.
       const latest = await db(`assistant_threads?id=eq.${body.threadId}&select=messages`)
       history = latest[0]?.messages ?? []
       if (history.length >= 60) throw new Error('This conversation is full. Start a new chat.')
       const currentPage = ['home', 'weather', 'fire', 'flights', 'sports', 'keg', 'fitness', 'house'].includes(body.page) ? body.page : 'home'
-      const sections = dashboardSections(body.message, currentPage, history)
-      if (fitness) fitness.allowWorkoutCreation = !sections.length || /\b(workouts?|exercises?|fitness|routines?|training|reps?|sets?)\b/i.test(body.message)
+      sections = dashboardSections(body.message, currentPage, history)
+      if (body.profileId && needsFitnessContext(body.message, currentPage, history, sections)) {
+        fitness = await loadFitness(db, body.profileId)
+        fitness.summary.requestedSaveAs = body.saveAs || 'auto'
+        fitness.allowWorkoutCreation = !sections.length || hasFitnessIntent(body.message)
+      }
       const invoke = async (name, body = {}) => {
         if (!['flights', 'fire-watch', 'safety-feeds', 'sports'].includes(name)) throw new Error('Unknown dashboard feed')
         const response = await fetchImpl(`${url}/functions/v1/${name}`, { method: 'POST', headers: { apikey: env('SUPABASE_ANON_KEY'), Authorization: authorization, 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(12000) })
@@ -138,17 +152,23 @@ export function createHandler({ env, fetchImpl = fetch }) {
       }
       const dashboard = await loadDashboard({ db, invoke, fetchJson, now: Date.now(), message: body.message + '\nPrevious question: ' + String([...history].reverse().find(item => item.role === 'user')?.content || '').slice(0, 6000), userId: user.id }, sections)
       payload = buildInput(history, body.message, profiles[0]?.preferences, currentPage, fitness, dashboard)
+      contextMs = Date.now() - startedAt
+      stage = 'model'
+      modelStartedAt = Date.now()
       charge = RESERVATION_USD
       const upstream = await fetchImpl('https://api.openai.com/v1/responses', {
         method: 'POST', headers: { Authorization: `Bearer ${env('OPENAI_API_KEY')}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload), signal: AbortSignal.timeout(45000),
       })
+      modelMs = Date.now() - modelStartedAt
       if (!upstream.ok) {
         if ([400, 401, 403, 404, 422, 429].includes(upstream.status)) charge = 0
         throw new Error(upstream.status === 429 ? 'The AI service is at its usage limit. Try again shortly.' : 'The AI service could not answer. Check the API key, credits, and model access.')
       }
       const result = await upstream.json()
+      usage = result.usage
       charge = usageCost(result.usage)
+      stage = 'parse'
       const text = responseText(result)
       const parsed = fitness ? parseFitnessAnswer(result, text, fitness.library) : { reply: text, workout: null }
       if (fitness?.allowWorkoutCreation === false && parsed.workout) throw new Error('This request was for dashboard information. No workout was saved.')
@@ -157,10 +177,12 @@ export function createHandler({ env, fetchImpl = fetch }) {
       const messages = [...history, { role: 'user', content: body.message.trim() }, { role: 'assistant', content: answer, ...(parsed.workout ? { workoutId: reservation, workoutType: isAdhoc ? 'adhoc' : 'routine', fitnessProfileId: fitness.profile.id } : {}) }]
       let savedRoutineId = null
       let savedSessionId = null
+      stage = 'save'
       if (fitness && isAdhoc) savedSessionId = await rpc('assistant_finish_adhoc', { p_id: reservation, p_amount: charge, p_messages: messages, p_profile: fitness.profile.id, p_session: adhocPayload(parsed.workout, fitness.sessions, fitness.library) })
       else if (fitness && fitness.allowWorkoutCreation !== false) savedRoutineId = await rpc('assistant_finish_fitness', { p_id: reservation, p_amount: charge, p_messages: messages, p_profile: fitness.profile.id, p_routine: parsed.workout })
       else await rpc('assistant_finish', { p_id: reservation, p_amount: charge, p_messages: messages })
       reservation = null
+      outcome = 'success'
       return json({ threadId: body.threadId, messages, cost: charge, savedRoutineId, savedSessionId, fitnessProfileId: fitness?.profile.id, truncated: result.status === 'incomplete' })
     } catch (error) {
       if (reservation) {
@@ -168,6 +190,26 @@ export function createHandler({ env, fetchImpl = fetch }) {
       }
       const message = error.name === 'TimeoutError' ? 'Chat timed out. Check your conversation before trying again; the request may have been billed.' : error.message
       return json({ error: message || 'Chat is unavailable. Try again shortly.' }, 400)
+    } finally {
+      if (metricsId) {
+        const tokenCount = value => Number.isSafeInteger(value) && value >= 0 ? value : null
+        // No prompts, answers, preferences, or upstream error bodies in telemetry.
+        // A metrics outage must never turn a saved answer into a failed request.
+        const recording = (async () => {
+          try {
+            await fetchImpl(`${url}/rest/v1/assistant_request_metrics?on_conflict=request_id`, {
+              method: 'POST', signal: AbortSignal.timeout(1500),
+              headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json', Prefer: 'resolution=ignore-duplicates,return=minimal' },
+              body: JSON.stringify({ request_id: metricsId, model: MODEL, outcome, error_stage: outcome === 'error' ? stage : null,
+                total_ms: Date.now() - startedAt, context_ms: contextMs, model_ms: modelMs ?? (modelStartedAt ? Date.now() - modelStartedAt : null),
+                input_tokens: tokenCount(usage?.input_tokens), cached_input_tokens: tokenCount(usage?.input_tokens_details?.cached_tokens), output_tokens: tokenCount(usage?.output_tokens),
+                dashboard_sections: sections, fitness_context: Boolean(fitness) }),
+            })
+          } catch { /* Best-effort observability; settlement remains authoritative. */ }
+        })()
+        if (typeof globalThis.EdgeRuntime?.waitUntil === 'function') globalThis.EdgeRuntime.waitUntil(recording)
+        else await recording
+      }
     }
   }
 }

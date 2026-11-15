@@ -3,7 +3,7 @@ import WorkoutTimer from './WorkoutTimer'
 import { completedSets, localDate } from './fitness-model.mjs'
 import { isTimedWorkout } from './workout-session.mjs'
 
-export default function WorkoutSession({ draft, busy, dirty, error, onStart, onChange, onSave, onFinish, onDiscard }) {
+export default function WorkoutSession({ draft, busy, syncState = 'saved', error, onStart, onChange, onSave, onFinish, onDiscard }) {
   const started = Boolean(draft.execution_started_at)
   const timedWorkout = isTimedWorkout(draft)
   const [timerOpen, setTimerOpen] = useState(started && timedWorkout)
@@ -33,6 +33,7 @@ export default function WorkoutSession({ draft, busy, dirty, error, onStart, onC
       <div><p>{started ? 'YOUR WORKOUT' : 'READY WHEN YOU ARE'}</p><h3>{draft.name}</h3><span>{started ? `${count} of ${total} sets checked` : `${draft.exercises.length} ${draft.exercises.length === 1 ? 'movement' : 'movements'} · ${total} sets · ${timedWorkout ? 'Timed workout' : 'Reps & weight'}`}</span></div>
       {started && <button className="fitness-primary" disabled={busy} onClick={onFinish}>{busy ? 'Saving…' : 'Finish workout ✓'}</button>}
     </header>
+    <p className="fitness-sync-status" role="status">{{ pending: 'Saved on this device · syncing shortly…', saving: 'Saving to your account…', offline: 'Saved on this device · waiting for connection', error: 'Saved on this device · cloud sync failed', conflict: 'Saved on this device · another device changed this workout', saved: 'Saved to your account' }[syncState]}</p>
     {!started ? <section className="fitness-panel fitness-start-card">
       <ol className="fitness-plan-list">{draft.exercises.map(exercise => <li key={exercise.id}><strong>{exercise.name}</strong><span>{exercise.sets.length} × {exercise.mode === 'timed' ? `${exercise.target_seconds}s` : `${exercise.target} reps`}{exercise.starting_weight != null ? ` · starting ${exercise.starting_weight} lbs` : ''}</span></li>)}</ol>
       <p className="fitness-muted">{timedWorkout ? 'Start opens your timer. Work and rest follow your plan; you can return to your sets at any time.' : 'Start opens your set checklist. Log what you do, check it off, and finish whenever you’re done.'}</p>
@@ -62,7 +63,6 @@ export default function WorkoutSession({ draft, busy, dirty, error, onStart, onC
     <details className="fitness-panel fitness-session-details"><summary>Workout details</summary>
       <label>Workout date<input type="date" value={draft.performed_on} max={localDate()} disabled={busy} onChange={event => onChange({ ...draft, performed_on: event.target.value })} /></label>
       <label>Session notes<textarea rows={3} maxLength={2000} value={draft.notes} disabled={busy} onChange={event => onChange({ ...draft, notes: event.target.value })} /></label>
-      <p className="fitness-draft-status" role="status">{dirty ? 'Changes kept on this device. Save draft to sync.' : 'Saved to your account.'}</p>
       <div className="fitness-actions"><button disabled={busy} onClick={onSave}>Save draft</button><button className="fitness-text-button" disabled={busy} onClick={onDiscard}>Discard workout</button>{!started && <button disabled={busy} onClick={onFinish}>Finish without starting</button>}</div>
     </details>
     {started && timedWorkout && <dialog ref={timerDialog} className="fitness-timer-dialog" aria-label="Workout timer" onCancel={event => { event.preventDefault(); closeTimer() }} onClose={() => setTimerOpen(false)}>
