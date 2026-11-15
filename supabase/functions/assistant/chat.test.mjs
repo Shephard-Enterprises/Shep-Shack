@@ -7,7 +7,7 @@ const threadId = '00000000-0000-0000-0000-000000000002'
 const requestId = '00000000-0000-0000-0000-000000000003'
 const env = key => ({ SUPABASE_URL: 'https://db.test', SUPABASE_ANON_KEY: 'public', SUPABASE_SERVICE_ROLE_KEY: 'private', OPENAI_API_KEY: 'secret' })[key]
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status })
-function harness({ member = true, auth = true, reservationError, upstream, preferences = 'Dumbbells only', history = [], metricsFail = false, metricsWait = null } = {}) {
+function harness({ member = true, auth = true, reservationError, upstream, preferences = 'Dumbbells only', history = [], adultHumor = false, metricsFail = false, metricsWait = null } = {}) {
   const calls = []
   const fetchImpl = async (url, options = {}) => {
     const body = options.body ? JSON.parse(options.body) : null
@@ -15,7 +15,7 @@ function harness({ member = true, auth = true, reservationError, upstream, prefe
     if (url.endsWith('/auth/v1/user')) return json({ id: userId }, auth ? 200 : 401)
     if (url.endsWith('/rpc/is_household_member')) return json(member)
     if (url.includes('/assistant_threads?')) return json([{ messages: history }])
-    if (url.includes('/assistant_profiles?')) return json([{ preferences }])
+    if (url.includes('/assistant_profiles?')) return json([{ preferences, adult_humor: adultHumor }])
     if (url.endsWith('/rpc/assistant_reserve')) return reservationError ? json({ message: reservationError }, 400) : json(null)
     if (url.includes('/assistant_request_metrics?')) { if (metricsFail) throw new Error('Metrics unavailable'); if (metricsWait) await metricsWait; return json(null) }
     if (url.endsWith('/rpc/assistant_finish')) return json(null)
@@ -159,4 +159,21 @@ test('production metrics run in the background without holding the chat response
     await Promise.all(tasks)
     globalThis.EdgeRuntime = previous
   }
+})
+
+
+test('adult humor uses the saved account preference, never a client-supplied override', async () => {
+  for (const enabled of [true, false]) {
+    const h = harness({ adultHumor: enabled })
+    assert.equal((await h.send({ adultHumor: !enabled })).status, 200)
+    const paid = h.calls.find(call => call.url === 'https://api.openai.com/v1/responses').body
+    assert.match(paid.instructions, enabled ? /Adult humor is ON/ : /Adult humor is OFF/)
+    assert.equal(paid.model, 'gpt-6-luna')
+  }
+})
+
+test('adult humor is off by default and turning it off overrides older chat tone', () => {
+  const history = [{ role: 'assistant', content: 'An old adult joke' }]
+  assert.match(buildInput(history, 'Hello', '', 'home').instructions, /Adult humor is OFF/)
+  assert.match(buildInput(history, 'Hello', '', 'home', null, null, true).instructions, /Adult humor is ON/)
 })
