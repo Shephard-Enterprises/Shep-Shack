@@ -21,7 +21,7 @@ const aircraftCatalog = {
 const bellArtwork = {
   name: 'Bell helicopter', category: 'Helicopter', rotorcraft: true,
   image: `${(import.meta.env?.BASE_URL??'/')}retro/aircraft/bell_helicopter_retro.png`,
-  artwork: true, useFeedName: true, maxDisplayWidth: 'min(100%, clamp(110px, calc(100vh - 470px), 300px))',
+  artwork: true, useFeedName: true, maxDisplayWidth: 'min(100%, clamp(110px, calc(100vh - 590px), 220px))',
   viewport: { x: 0, y: 0, width: 1568, height: 1003, canvasWidth: 1568 },
   referenceNote: 'Bell family illustration · model may differ',
 }
