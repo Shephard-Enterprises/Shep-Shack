@@ -50,7 +50,6 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
   const [budget, setBudget] = useState(null)
   const [cap, setCap] = useState('5')
   const [preferences, setPreferences] = useState('')
-  const [adultHumor, setAdultHumor] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [workoutOptions, setWorkoutOptions] = useState(null)
@@ -81,13 +80,12 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
     try {
       const [nextBudget, profile, nextThreads, status] = await Promise.all([
         refreshBudget(),
-        supabase.from('assistant_profiles').select('preferences,adult_humor').eq('user_id', userId).maybeSingle().then(check),
+        supabase.from('assistant_profiles').select('preferences').eq('user_id', userId).maybeSingle().then(check),
         refreshThreads(),
         assistant({ action: 'status' }),
       ])
       setCap(String(nextBudget.limit))
       setPreferences(profile?.preferences || '')
-      setAdultHumor(profile?.adult_humor === true)
       setConfigured(status.configured)
       setWorkoutsReady(Boolean(status.capabilities?.adhocWorkouts))
       if (!busy) {
@@ -160,17 +158,6 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
     } catch (failure) { setError(failure.message) }
     finally { setBusy(false) }
   }
-  async function saveAdultHumor(enabled) {
-    const previous = adultHumor
-    setAdultHumor(enabled)
-    setBusy(true); setError(''); setNotice('')
-    try {
-      const saved = check(await supabase.rpc('assistant_set_adult_humor', { p_enabled: enabled }))
-      setAdultHumor(saved === true)
-      setNotice(`Adult humor ${saved ? 'on' : 'off'}. Applies to your next message, including existing chats.`)
-    } catch (failure) { setAdultHumor(previous); setError(failure.message) }
-    finally { setBusy(false) }
-  }
   async function saveCap(event) {
     event.preventDefault()
     setBusy(true); setError(''); setNotice('')
@@ -236,10 +223,6 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
           </form>
           <p className="assistant-footnote">Powered by OpenAI · Chats saved to your account · Recent messages provide context</p>
         </> : <div className="assistant-settings">
-          <section className="assistant-tone-setting" aria-label="Humor preference">
-            <label htmlFor="assistant-adult-humor"><span>Adult humor</span><input id="assistant-adult-humor" type="checkbox" role="switch" checked={adultHumor} disabled={locked} onChange={event => saveAdultHumor(event.target.checked)} /></label>
-            <p>Swearing, cheeky jokes, and playful roasts when they fit. Saves automatically for your login.</p>
-          </section>
           <form onSubmit={savePreferences}>
             <h3>What should Patty know?</h3><p>Your goals, available equipment, preferences, or a summary from your old workout chat. Included in every new conversation.</p>
             <label htmlFor="assistant-preferences">About you</label>

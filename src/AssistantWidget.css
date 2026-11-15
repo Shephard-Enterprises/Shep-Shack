@@ -31,14 +31,6 @@
 .assistant-conversations .assistant-history{padding:6px 0;margin:0}
 .assistant-quick-prompts{display:flex;gap:7px;padding:0 16px 8px;flex-wrap:wrap;flex-shrink:0}
 .assistant-quick-prompts button{font-size:12px;min-height:36px;padding:7px 10px;background:transparent;text-align:left}
-.assistant-tone-setting{border-bottom:1px solid var(--assistant-border);padding:10px 0 20px;margin-bottom:18px}
-.assistant-tone-setting label{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:44px;font-size:18px;font-weight:600;cursor:pointer}
-.assistant-tone-setting input[role=switch]{appearance:none;width:48px;height:28px;border-radius:20px;padding:3px;border:1px solid #8da99b66;background:#173334;cursor:pointer;flex-shrink:0}
-.assistant-tone-setting input[role=switch]::before{content:'';display:block;width:20px;height:20px;border-radius:50%;background:#d6dfcf;transition:transform .15s}
-.assistant-tone-setting input[role=switch]:checked{background:#39796b;border-color:#88c9ad}
-.assistant-tone-setting input[role=switch]:checked::before{transform:translateX(19px)}
-.assistant-tone-setting input:disabled{opacity:.5;cursor:default}
-.assistant-tone-setting p{margin:6px 0 0!important}
 .assistant-message>.assistant-markdown{white-space:normal;min-width:0}
 .assistant-markdown p{margin:0 0 .75em;white-space:pre-wrap}
 .assistant-markdown>:first-child{margin-top:0}

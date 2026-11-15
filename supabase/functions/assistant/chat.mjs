@@ -11,7 +11,7 @@ const instructions = `You are Patty, the Shep Shack assistant named after the ho
 
 ${dashboardGuide}`
 
-export function buildInput(history, message, preferences, page, fitness = null, dashboard = null, adultHumor = false) {
+export function buildInput(history, message, preferences, page, fitness = null, dashboard = null) {
   if (typeof message !== 'string' || !message.trim() || bytes(message) > 6000) throw new Error('Enter a message up to 6,000 bytes.')
   const input = [{ role: 'user', content: message.trim() }]
   let size = bytes(message)
@@ -28,10 +28,7 @@ export function buildInput(history, message, preferences, page, fitness = null, 
   input.unshift({ role: 'user', content: contextMessage() })
   // A UTF-8 byte is a conservative text-token upper bound, with extra headroom for
   // message framing. 40k input bytes + 2048 output tokens fit below the $0.05 hold.
-  const tone = adultHumor === true
-    ? 'Adult humor is ON for this account. Occasional swearing, cheeky non-graphic innuendo, and playful roasts are welcome when they fit the conversation. Do not force jokes or insult someone who does not welcome it. Keep safety and health guidance clear and serious. This preference changes tone only.'
-    : 'Adult humor is OFF for this account. Keep humor clean and avoid profanity and sexual innuendo, even if older messages used an adult tone.'
-  const payload = { model: MODEL, instructions: `${instructions}\n\n${tone}`, input, store: false, max_output_tokens: MAX_OUTPUT_TOKENS, reasoning: { effort: 'none' }, ...(fitness ? { text: { format: fitnessFormatFor(fitness.allowWorkoutCreation === false ? [] : fitness.summary.movementLibrary) } } : {}) }
+  const payload = { model: MODEL, instructions, input, store: false, max_output_tokens: MAX_OUTPUT_TOKENS, reasoning: { effort: 'none' }, ...(fitness ? { text: { format: fitnessFormatFor(fitness.allowWorkoutCreation === false ? [] : fitness.summary.movementLibrary) } } : {}) }
   // Keep the newest question and both authoritative contexts; trim oldest
   // conversation messages first when dashboard and training context are combined.
   while (bytes(JSON.stringify(payload)) > 40000 && input.length > 2) input.splice(1, 1)
@@ -122,9 +119,9 @@ export function createHandler({ env, fetchImpl = fetch }) {
       const threads = await db(`assistant_threads?id=eq.${body.threadId}&select=messages`)
       let history = threads[0]?.messages ?? []
       if (history.length >= 60) return json({ error: 'This conversation has reached 30 exchanges. Start a new chat; saved preferences carry over.' }, 400)
-      const profiles = await db(`assistant_profiles?user_id=eq.${user.id}&select=preferences,adult_humor`)
+      const profiles = await db(`assistant_profiles?user_id=eq.${user.id}&select=preferences`)
       let payload
-      try { payload = buildInput(history, body.message, profiles[0]?.preferences, body.page, fitness, null, profiles[0]?.adult_humor) } catch (error) { return json({ error: error.message }, 400) }
+      try { payload = buildInput(history, body.message, profiles[0]?.preferences, body.page, fitness) } catch (error) { return json({ error: error.message }, 400) }
       await rpc('assistant_reserve', { p_id: body.requestId, p_user: user.id, p_thread: body.threadId, p_title: body.message.trim().slice(0, 80) })
       reservation = body.requestId
       metricsId = body.requestId
@@ -154,7 +151,7 @@ export function createHandler({ env, fetchImpl = fetch }) {
         return response.json()
       }
       const dashboard = await loadDashboard({ db, invoke, fetchJson, now: Date.now(), message: body.message + '\nPrevious question: ' + String([...history].reverse().find(item => item.role === 'user')?.content || '').slice(0, 6000), userId: user.id }, sections)
-      payload = buildInput(history, body.message, profiles[0]?.preferences, currentPage, fitness, dashboard, profiles[0]?.adult_humor)
+      payload = buildInput(history, body.message, profiles[0]?.preferences, currentPage, fitness, dashboard)
       contextMs = Date.now() - startedAt
       stage = 'model'
       modelStartedAt = Date.now()
