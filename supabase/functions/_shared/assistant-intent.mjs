@@ -8,5 +8,5 @@ export function needsFitnessContext(message, page, history = [], dashboardSectio
   if (dashboardSections.length) return false
   if (page === 'fitness') return true
   const previous = [...history].reverse().find(item => item.role === 'user')?.content || ''
-  return hasFitnessIntent(previous) && /^(and\b|what about\b|how about\b|make\b|change\b|use\b|instead\b|yes\b|save\b|copy\b|duplicate\b|for rosy\b|for justin\b|do that\b)/i.test(message.trim())
+  return (hasFitnessIntent(previous) || history.some(item => item.workoutId)) && /^(and\b|what about\b|how about\b|make\b|change\b|swap\b|replace\b|add\b|remove\b|use\b|instead\b|yes\b|save\b|copy\b|duplicate\b|for rosy\b|for justin\b|do that\b|do the same\b|do same\b)/i.test(message.trim())
 }
