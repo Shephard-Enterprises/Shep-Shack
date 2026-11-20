@@ -36,6 +36,8 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
   const launcher = useRef(null)
   const bottom = useRef(null)
   const input = useRef(null)
+  // Ignore replies and history loads belonging to a conversation that was closed.
+  const conversationVersion = useRef(0)
   const [view, setView] = useState('chat')
   const [threads, setThreads] = useState([])
   const [threadId, setThreadId] = useState(() => crypto.randomUUID())
@@ -67,36 +69,43 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
     setThreads(next)
     return next
   }
-  async function loadThread(id) {
+  async function loadThread(id, version) {
     const thread = check(await supabase.from('assistant_threads').select('messages').eq('id', id).single())
+    if (version !== conversationVersion.current) return
     setThreadId(id)
     setMessages(thread.messages)
     setDraft('')
   }
   async function openChat() {
+    newChat()
+    const version = conversationVersion.current
     dialog.current.showModal()
     setLoading(true)
     setError('')
     try {
-      const [nextBudget, profile, nextThreads, status] = await Promise.all([
+      const [nextBudget, profile, , status] = await Promise.all([
         refreshBudget(),
         supabase.from('assistant_profiles').select('preferences').eq('user_id', userId).maybeSingle().then(check),
         refreshThreads(),
         assistant({ action: 'status' }),
       ])
+      if (version !== conversationVersion.current) return
       setCap(String(nextBudget.limit))
       setPreferences(profile?.preferences || '')
       setConfigured(status.configured)
-      setWorkoutsReady(Boolean(status.capabilities?.adhocWorkouts))
-      if (!busy) {
-        const active = nextThreads.find(thread => thread.id === threadId) || nextThreads[0]
-        if (active) await loadThread(active.id)
-        else setMessages([])
-      }
-    } catch (failure) { setError(failure.message) }
-    finally { setLoading(false) }
+      setWorkoutsReady(Boolean(status.capabilities?.adhocWorkouts && status.capabilities?.routineEditing && status.capabilities?.routineUndo))
+    } catch (failure) {
+      if (version === conversationVersion.current) setError(failure.message)
+    } finally {
+      if (version === conversationVersion.current) setLoading(false)
+    }
   }
   function newChat() {
+    conversationVersion.current += 1
+    setPending('')
+    setBusy(false)
+    setLoading(false)
+    setSaveAs('auto')
     setThreadId(crypto.randomUUID())
     setMessages([])
     setDraft('')
@@ -104,26 +113,36 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
     setNotice('')
     setView('chat')
     setWorkoutOptions(null)
-    input.current?.focus()
+    if (dialog.current?.open) input.current?.focus()
+  }
+  function closeChat() {
+    newChat()
+    launcher.current?.focus()
   }
   async function selectThread(id) {
     if (!id) { newChat(); return }
     setLoading(true)
     setError('')
     setNotice('')
-    try { await loadThread(id) } catch (failure) { setError(failure.message) }
-    finally { setLoading(false) }
+    const version = ++conversationVersion.current
+    try { await loadThread(id, version) } catch (failure) {
+      if (version === conversationVersion.current) setError(failure.message)
+    } finally {
+      if (version === conversationVersion.current) setLoading(false)
+    }
   }
   async function removeThread() {
+    const version = conversationVersion.current
     setBusy(true)
     setError('')
     try {
       check(await supabase.from('assistant_threads').delete().eq('id', threadId))
       await refreshThreads()
+      if (version !== conversationVersion.current) return
       newChat()
       setNotice('Conversation deleted.')
-    } catch (failure) { setError(failure.message) }
-    finally { setBusy(false) }
+    } catch (failure) { if (version === conversationVersion.current) setError(failure.message) }
+    finally { if (version === conversationVersion.current) setBusy(false) }
   }
   async function send(event) {
     event.preventDefault()
@@ -134,41 +153,69 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
     setError('')
     setNotice('')
     setPending(message)
+    const version = conversationVersion.current
     try {
       const result = await assistant({ threadId, requestId: crypto.randomUUID(), message, page, profileId, saveAs: showTraining ? saveAs : 'auto' })
-      setMessages(result.messages)
       if (result.savedRoutineId || result.savedSessionId) window.dispatchEvent(new CustomEvent('fitness-updated', { detail: { profileId: result.fitnessProfileId } }))
+      if (version !== conversationVersion.current) return
+      setMessages(result.messages)
       setDraft('')
       if (result.truncated) setNotice('The answer reached its length limit. Ask a follow-up to continue.')
-    } catch (failure) { setError(failure.message) }
-    finally {
-      setPending('')
-      try { await Promise.all([refreshBudget(), refreshThreads()]) } catch { setNotice('Could not refresh usage. Reopen chat to update it.') }
-      setBusy(false)
-      input.current?.focus()
+    } catch (failure) {
+      if (version === conversationVersion.current) setError(failure.message)
+    } finally {
+      try { await Promise.all([refreshBudget(), refreshThreads()]) } catch {
+        if (version === conversationVersion.current) setNotice('Could not refresh usage. Reopen chat to update it.')
+      }
+      if (version === conversationVersion.current) {
+        setPending('')
+        setBusy(false)
+        input.current?.focus()
+      }
+    }
+  }
+  async function undoRoutine(message) {
+    const version = conversationVersion.current
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const result = await assistant({ action: 'undoRoutine', changeId: message.changeId })
+      window.dispatchEvent(new CustomEvent('fitness-updated', { detail: { profileId: result.fitnessProfileId } }))
+      if (version !== conversationVersion.current) return
+      setMessages(current => current.map(item => item.changeId === message.changeId ? { ...item, changeUndone: true } : item))
+      setNotice(result.removed ? 'Removed the routine Patty created.' : 'Restored the routine to its previous version.')
+    } catch (failure) {
+      if (version === conversationVersion.current) setError(failure.message)
+    } finally {
+      if (version === conversationVersion.current) setBusy(false)
     }
   }
   async function savePreferences(event) {
     event.preventDefault()
+    const version = conversationVersion.current
     setBusy(true); setError(''); setNotice('')
     try {
       if (new TextEncoder().encode(preferences).length > 4000) throw new Error('Keep your saved preferences under 4,000 bytes.')
       check(await supabase.from('assistant_profiles').upsert({ user_id: userId, preferences }))
+      if (version !== conversationVersion.current) return
       setNotice('Saved. These preferences will be included in every chat.')
-    } catch (failure) { setError(failure.message) }
-    finally { setBusy(false) }
+    } catch (failure) { if (version === conversationVersion.current) setError(failure.message) }
+    finally { if (version === conversationVersion.current) setBusy(false) }
   }
   async function saveCap(event) {
     event.preventDefault()
+    const version = conversationVersion.current
     setBusy(true); setError(''); setNotice('')
     try {
       const amount = Number(cap)
       if (!cap.trim() || !Number.isFinite(amount) || amount < 0 || amount > 100) throw new Error('Choose a monthly cap from $0 to $100.')
       check(await supabase.rpc('assistant_set_limit', { p_limit: amount }))
       await refreshBudget()
+      if (version !== conversationVersion.current) return
       setNotice('Household monthly cap saved.')
-    } catch (failure) { setError(failure.message) }
-    finally { setBusy(false) }
+    } catch (failure) { if (version === conversationVersion.current) setError(failure.message) }
+    finally { if (version === conversationVersion.current) setBusy(false) }
   }
   const locked = busy || loading
   const atCap = budget && Number(budget.limit) - Number(budget.used) < 0.05
@@ -178,7 +225,7 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
     <button ref={launcher} className="assistant-launcher" type="button" onClick={openChat} aria-label="Open Patty assistant" aria-haspopup="dialog">
       <img className="assistant-avatar" src={pattyAvatar} alt="" width="42" height="42" /><span>Ask Patty</span>
     </button>
-    <dialog ref={dialog} className="assistant-dialog" aria-labelledby="assistant-title" onClose={() => launcher.current?.focus()}>
+    <dialog ref={dialog} className="assistant-dialog" aria-labelledby="assistant-title" onClose={closeChat}>
       <div className="assistant-shell">
         <header className="assistant-header">
           <div className="assistant-brand"><img className="assistant-avatar" src={pattyAvatar} alt="" width="48" height="48" /><div><small>YOUR EVERYDAY ASSISTANT</small><h2 id="assistant-title">Ask Patty</h2></div></div>
@@ -197,7 +244,7 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
         {notice && <p className="assistant-notice" role="status">{notice}</p>}
         {view === 'chat' ? <>
           <button className="assistant-workout-toggle" type="button" aria-expanded={showTraining} aria-controls="assistant-workout-options" onClick={() => setWorkoutOptions(!showTraining)}>Workout options{showTraining ? ' −' : ' +'}</button>
-          {showTraining && <div id="assistant-workout-options"><div className="assistant-training-profile"><label htmlFor="assistant-training-profile">Training for</label><select id="assistant-training-profile" value={profileId} disabled={locked} onChange={event => onProfileChange(event.target.value)}>{FITNESS_PROFILES.map(profile => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select><span>Workouts save here</span></div>
+          {showTraining && <div id="assistant-workout-options"><div className="assistant-training-profile"><label htmlFor="assistant-training-profile">Default profile</label><select id="assistant-training-profile" value={profileId} disabled={locked} onChange={event => onProfileChange(event.target.value)}>{FITNESS_PROFILES.map(profile => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select><span>Or ask Patty to use another profile</span></div>
           <div className="assistant-training-profile"><label htmlFor="assistant-save-as">Save workouts as</label><select id="assistant-save-as" value={saveAs} disabled={locked} onChange={event => setSaveAs(event.target.value)}><option value="auto">Follow my request</option><option value="adhoc">One-off workout</option><option value="routine">Reusable routine</option></select></div>
           </div>}
           <details className="assistant-conversations"><summary>Conversations{threads.length ? ` (${threads.length})` : ''}</summary><div className="assistant-history">
@@ -211,7 +258,7 @@ export default function AssistantWidget({ userId, page, profileId, onProfileChan
           <div className="assistant-quick-prompts" aria-label="Suggested questions">{(pagePrompts[page] || pagePrompts.home).map(prompt => <button key={prompt} type="button" disabled={locked} onClick={() => { setWorkoutOptions(null); setDraft(prompt); input.current?.focus() }}>{prompt}</button>)}</div>
           <div className="assistant-messages" role="log" aria-label="Conversation messages" aria-busy={busy}>
             {!messages.length && !pending && <div className="assistant-welcome"><img className="assistant-avatar" src={pattyAvatar} alt="Patty" width="96" height="96" /><h3>What’s on your mind?</h3><p>{page === 'fitness' ? 'Plan a workout or ask about your progress. Review any saved workout in Fitness, then hit Start.' : 'Ask about this dashboard, plan a workout, or get help with your day.'}</p></div>}
-            {messages.map((message, index) => <article key={index} className={`assistant-message ${message.role}`}><small>{message.role === 'user' ? 'YOU' : 'PATTY'}</small>{message.role === 'assistant' ? <Suspense fallback={<div>{message.content}</div>}><AssistantMarkdown>{message.content}</AssistantMarkdown></Suspense> : <div>{message.content}</div>}{message.workoutId && <button className="assistant-open-workout" type="button" disabled={locked} onClick={() => { onOpenFitness(message.fitnessProfileId, message.workoutId); dialog.current.close() }}>Open in Fitness →</button>}</article>)}
+            {messages.map((message, index) => <article key={index} className={`assistant-message ${message.role}`}><small>{message.role === 'user' ? 'YOU' : 'PATTY'}</small>{message.role === 'assistant' ? <Suspense fallback={<div>{message.content}</div>}><AssistantMarkdown>{message.content}</AssistantMarkdown></Suspense> : <div>{message.content}</div>}{message.changeId && <div className="assistant-routine-change"><strong>{message.profileName} · {message.routineName}</strong>{message.changeUndone ? <p role="status">Change undone</p> : <><ul>{message.changeSummary?.map((change, i) => <li key={i}>{change}</li>)}</ul><button type="button" disabled={locked} onClick={() => undoRoutine(message)}>Undo routine change</button></>}</div>}{message.workoutId && !message.changeUndone && <button className="assistant-open-workout" type="button" disabled={locked} onClick={() => { onOpenFitness(message.fitnessProfileId, message.workoutId); dialog.current.close() }}>Open in Fitness →</button>}</article>)}
             {pending && <><article className="assistant-message user"><small>YOU</small><div>{pending}</div></article><p className="assistant-thinking" role="status">Patty is thinking…</p></>}
             <div ref={bottom} />
           </div>

@@ -1,6 +1,6 @@
 # Dashboard assistant
 
-`Ask Patty` is mounted once inside the signed-in dashboard so it is available on every destination. Conversations and account preferences are private to the signed-in household member. Fitness profiles (Justin and Rosy) and their workout logs are shared within the allowlisted household. The monthly cap is shared across the household and editable by any allowlisted household member.
+`Ask Patty` is mounted once inside the signed-in dashboard so it is available on every destination. Conversations and account preferences are private to the signed-in household member. Closing the chat (including Escape or opening a saved workout) resets the active conversation; reopening starts a new chat. Saved chats remain available through Conversations, and a reply finishing after close cannot populate the new chat. Fitness profiles (Justin and Rosy) and their workout logs are shared within the allowlisted household. The monthly cap is shared across the household and editable by any allowlisted household member.
 
 ## Enable
 
@@ -9,7 +9,7 @@
 3. Deploy with `npx supabase functions deploy assistant` and release the frontend through the dashboard's normal deployment process.
 4. Open **Ask Patty → Preferences & budget**, save the household cap, and optionally save goals, equipment, and context from a previous workout conversation. The default cap is $5/month; $0 pauses new requests.
 
-Without the key, the widget reports that chat needs connecting; preferences and budget still work after the migration. Without the migration/function deployment, it displays a setup error instead of pretending to answer. There is no synchronization with a personal ChatGPT account. The training-profile selector is shared with Fitness; only that profile is queried for workout context. Asking about another person requires switching the active profile. Patty can create reusable routines or one-off draft sessions with rep-based or timed sets and report logged progress; she does not edit/delete existing workouts, mark them completed, or record cardio events through chat.
+Without the key, the widget reports that chat needs connecting; preferences and budget still work after the migration. Without the migration/function deployment, it displays a setup error instead of pretending to answer. There is no synchronization with a personal ChatGPT account. The training-profile selector is shared with Fitness and supplies the default profile. Patty receives separate household training summaries and can answer questions or save a workout for another named profile without switching. For example, “Copy my Upper A routine to Rosy” copies the stored prescription into Rosy’s routines with new IDs; the source and both profiles’ completed history stay intact. Ambiguous routine names or destinations require clarification. The server validates destinations against profiles read with the caller’s household access, and one-off workout suggestions use only the destination’s history. Exact routine copies remain routines even when the chat save-mode selector says one-off. Patty can create reusable routines or one-off draft sessions with rep-based or timed sets and report logged progress; she can edit existing routines on request, but does not edit/delete completed workouts, mark them completed, or record cardio events through chat.
 
 ## Spending controls
 
@@ -59,3 +59,13 @@ Live feed requests forward the household member's token, never the service-role 
 Prepared one-offs use shared `prefillSessionExercises` logic to carry forward weight and reps from the selected profile's last completed matching movement/mode. These are editable suggestions with `done: false` and no performed seconds. Reusable routines receive the same prefills when the client creates a session. Source set positions are preserved; skipped/new positions stay empty.
 
 Generated exercises include nullable `starting_weight` in pounds. Prescribed user weights are validated and retained as plan defaults; recorded history takes precedence. Missing-history set positions can use the plan's starting weight without inventing completed work.
+
+## Routine edits and undo
+
+Apply `20261119010000_patty_routine_changes.sql` before deploying the updated assistant and frontend. It adds atomic routine updates, private before/after snapshots, and an authenticated undo RPC. The client checks the routine-edit/undo capabilities before enabling chat.
+
+Examples: “Add a set to Rosy’s Upper A routine”, “Swap dumbbell rows for seated cable rows in mine”, or “Do the same for Rosy”. Patty asks for clarification when the routine or profile is ambiguous. Edits keep the routine ID and creator; they never move a routine between profiles. The server only accepts edits to a complete routine supplied in the current context, and checks its database version before writing. Changes to a saved routine do not alter sessions already started from it.
+
+Routine saves show the profile, routine name, a server-generated change summary, Open in Fitness, and Undo routine change. Undo uses no model call or chat budget. It restores the prior prescription for edits, or removes a newly created/copied routine if it has not been used for a workout. It refuses to overwrite later changes, is idempotent, and belongs to the account that made the change. Undo status persists in conversation history, including when an older response completes later. Snapshots expire with their request (90 days) or when the conversation is deleted.
+
+SQL regression checks: run `supabase/tests/patty_routine_changes.sql` against a disposable database with migrations applied. It rolls back fixtures and checks create/edit/undo, stale-version conflicts, retries, caller ownership, RLS, history protection, and transcript undo markers. This was also run against embedded PostgreSQL using PGlite during implementation.

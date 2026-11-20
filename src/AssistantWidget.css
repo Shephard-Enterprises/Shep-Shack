@@ -49,3 +49,9 @@
 .assistant-table table{border-collapse:collapse;font-size:13px;width:100%}
 .assistant-table :is(th,td){text-align:left;border:1px solid var(--assistant-border);padding:7px 9px;min-width:75px}
 .assistant-table th{background:#254b46}
+
+.assistant-message > .assistant-routine-change { white-space: normal; margin-top: 12px; padding: 12px; border: 1px solid var(--assistant-border); border-radius: 10px; }
+.assistant-routine-change strong { display: block; font-size: 0.9rem; }
+.assistant-routine-change ul { padding-left: 20px; margin: 8px 0; font-size: 0.85rem; }
+.assistant-routine-change button { min-height: 40px; padding: 8px 12px; border: 1px solid currentColor; border-radius: 8px; background: transparent; color: inherit; cursor: pointer; }
+.assistant-routine-change button:disabled { opacity: 0.5; cursor: default; }
